@@ -1,0 +1,29 @@
+{
+  "deviceId": "reachy-mini-sim-001",
+  "deviceName": "Reachy Mini Simulation",
+  "deviceSn": "SIM-REACHY-001",
+  "enterpriseId": "1001",
+  "enterpriseName": "Reachy Mini Test Lab",
+  "tenantId": "reachy-mini-demo",
+  "hostName": "reachy-mini-sim-node",
+  "ipAddress": "127.0.0.1",
+  "osName": "Ubuntu 22.04",
+  "architecture": "x86_64",
+  "timestamp": 0,
+  "deviceInfo": {
+    "cpuUsage": 18.9,
+    "memoryTotalMb": 16384,
+    "memoryUsedMb": 6240
+  },
+  "metrics": {
+    "loadAverage": 0.68,
+    "simulationEnabled": true,
+    "mockupSimEnabled": true,
+    "conversationBackend": "huggingface",
+    "cameraEnabled": false,
+    "headTracker": "none",
+    "movementLoopHz": 60,
+    "lastMotion": "breathing_idle"
+  },
+  "gpus": []
+}

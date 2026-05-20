@@ -1,0 +1,29 @@
+{
+  "deviceId": "reachy-mini-001",
+  "deviceName": "Reachy Mini Wireless",
+  "deviceSn": "RMW-2026-001",
+  "enterpriseId": "1001",
+  "enterpriseName": "Pollen Robotics Lab",
+  "tenantId": "reachy-mini-demo",
+  "hostName": "reachy-mini-wireless-01",
+  "ipAddress": "192.168.2.42",
+  "osName": "Ubuntu 22.04",
+  "architecture": "aarch64",
+  "timestamp": 0,
+  "deviceInfo": {
+    "cpuUsage": 38.7,
+    "memoryTotalMb": 8192,
+    "memoryUsedMb": 3560
+  },
+  "metrics": {
+    "loadAverage": 1.24,
+    "conversationBackend": "openai_compatible_chat",
+    "activeProfile": "default",
+    "cameraEnabled": true,
+    "headTracker": "mediapipe",
+    "batteryPercent": 86.5,
+    "audioInputSampleRate": 16000,
+    "audioOutputSampleRate": 24000
+  },
+  "gpus": []
+}

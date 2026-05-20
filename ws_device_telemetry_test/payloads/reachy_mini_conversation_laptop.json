@@ -1,0 +1,40 @@
+{
+  "deviceId": "reachy-mini-dev-laptop",
+  "deviceName": "Reachy Mini Conversation Laptop",
+  "deviceSn": "DEV-LAPTOP-001",
+  "enterpriseId": "1001",
+  "enterpriseName": "Reachy Mini Test Lab",
+  "tenantId": "reachy-mini-demo",
+  "hostName": "conversation-node-01",
+  "ipAddress": "192.168.2.236",
+  "osName": "Windows 11",
+  "architecture": "x86_64",
+  "timestamp": 0,
+  "deviceInfo": {
+    "cpuUsage": 27.4,
+    "memoryTotalMb": 32768,
+    "memoryUsedMb": 14280
+  },
+  "metrics": {
+    "loadAverage": 0.92,
+    "appName": "reachy_mini_conversation_app",
+    "appVersion": "0.6.2",
+    "backendProvider": "openai_compatible_chat",
+    "asrModel": "qwen-audio-asr",
+    "chatModel": "qwen-plus",
+    "ttsModel": "qwen-tts",
+    "ttsVoice": "ChineseFemale",
+    "robotConnection": "connected",
+    "gradioEnabled": true
+  },
+  "gpus": [
+    {
+      "index": 0,
+      "name": "NVIDIA RTX 4090",
+      "utilization": 42.8,
+      "memoryTotalMb": 24564,
+      "memoryUsedMb": 6120,
+      "temperature": 58.6
+    }
+  ]
+}
