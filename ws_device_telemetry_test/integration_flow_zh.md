@@ -1,4 +1,4 @@
-# Reachy Mini 平台接口联调流程
+﻿# Reachy Mini 平台接口联调流程
 
 这份文档用于确认当前平台接口联调结果，后续会基于这些结论开发 Reachy Mini app。
 
@@ -242,7 +242,7 @@ MAC-001
 当前已完成第一版 app 集成骨架：
 
 ```text
-src/reachy_mini_conversation_app/platform_client.py
+src/xiaoze_conversation_app/platform_client.py
 ```
 
 主 app 启动时会按环境变量决定是否启用平台服务。启用后会在后台线程中周期性发送遥测；如果配置了启动激活，也会先调用设备激活接口。

@@ -1,7 +1,7 @@
-import json
+﻿import json
 
-from reachy_mini_conversation_app.platform_agent import _extract_text
-from reachy_mini_conversation_app.platform_client import (
+from xiaoze_conversation_app.platform_agent import _extract_text
+from xiaoze_conversation_app.platform_client import (
     PlatformClient,
     PlatformClientConfig,
     _is_terminal_response_end,

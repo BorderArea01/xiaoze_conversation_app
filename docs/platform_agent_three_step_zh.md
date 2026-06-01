@@ -1,6 +1,6 @@
-# Reachy Mini 平台智能体接入三步流程
+﻿# Reachy Mini 平台智能体接入三步流程
 
-本文按当前已确认的平台接口整理，用于后续 `reachy_mini_conversation_app` 开发、联调和部署。
+本文按当前已确认的平台接口整理，用于后续 `xiaoze_conversation_app` 开发、联调和部署。
 
 ## 0. 当前确认的地址
 
@@ -196,13 +196,13 @@ REACHY_PLATFORM_TELEMETRY_WS_URL=ws://192.168.2.236:8085/ws/device/telemetry
 平台客户端：
 
 ```text
-src/reachy_mini_conversation_app/platform_client.py
+src/xiaoze_conversation_app/platform_client.py
 ```
 
 平台智能体后端：
 
 ```text
-src/reachy_mini_conversation_app/platform_agent.py
+src/xiaoze_conversation_app/platform_agent.py
 ```
 
 WebSocket 测试脚本：

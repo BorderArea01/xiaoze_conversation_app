@@ -1,4 +1,4 @@
----
+﻿---
 title: Xiaoze Conversation App
 emoji: 🎤
 colorFrom: red
@@ -252,7 +252,7 @@ When using the headless settings UI, selecting `Hugging Face` lets you choose ei
 Activate your virtual environment, then launch:
 
 ```bash
-reachy-mini-conversation-app
+xiaoze-conversation-app
 ```
 
 > [!TIP]
@@ -275,19 +275,19 @@ The app runs in console mode by default. Add `--gradio` to launch a web UI at ht
 
 ```bash
 # Run with MediaPipe head tracking
-reachy-mini-conversation-app --head-tracker mediapipe
+xiaoze-conversation-app --head-tracker mediapipe
 
 # Run with the YOLO face-detection backend for head tracking
-reachy-mini-conversation-app --head-tracker yolo
+xiaoze-conversation-app --head-tracker yolo
 
 # Run with local vision processing (requires local_vision extra)
-reachy-mini-conversation-app --local-vision
+xiaoze-conversation-app --local-vision
 
 # Audio-only conversation (no camera)
-reachy-mini-conversation-app --no-camera
+xiaoze-conversation-app --no-camera
 
 # Launch with Gradio web interface
-reachy-mini-conversation-app --gradio
+xiaoze-conversation-app --gradio
 ```
 
 > [!WARNING]
@@ -295,7 +295,7 @@ reachy-mini-conversation-app --gradio
 
 ## Build and publish
 
-This project is a Reachy Mini Python app. The dashboard entry point is `ReachyMiniConversationApp`, declared in `pyproject.toml` under `reachy_mini_apps`.
+This project is a Reachy Mini Python app. The dashboard entry point is `XiaozeConversationApp`, declared in `pyproject.toml` under `xiaoze_apps`.
 
 Local dashboard test:
 
@@ -316,7 +316,7 @@ Before publishing:
 uv run ruff check src tests
 uv run pytest -q
 uv run python -m compileall src
-node --check src/reachy_mini_conversation_app/static/main.js
+node --check src/xiaoze_conversation_app/static/main.js
 reachy-mini-app-assistant check
 ```
 
@@ -337,7 +337,7 @@ reachy-mini-app-assistant publish
 
 Keep provider keys and platform tokens out of git. Configure them after installation through the app settings UI or the target machine's local `.env`.
 
-See the Chinese deployment checklist in [`docs/reachy_mini_build_deploy_zh.md`](docs/reachy_mini_build_deploy_zh.md).
+See the Chinese deployment checklist in [`docs/xiaoze_build_deploy_zh.md`](docs/xiaoze_build_deploy_zh.md).
 
 ## LLM tools exposed to the assistant
 
@@ -375,7 +375,7 @@ Write plain-text prompts in `instructions.txt`. To reuse shared prompt pieces, a
 ```
 [default_prompt]
 ```
-Each placeholder pulls the matching file under `src/reachy_mini_conversation_app/prompts/` (nested paths allowed). Built-in profiles are now enterprise scenarios such as front desk, meeting room, office desk, visitor registration, and administration.
+Each placeholder pulls the matching file under `src/xiaoze_conversation_app/prompts/` (nested paths allowed). Built-in profiles are now enterprise scenarios such as front desk, meeting room, office desk, visitor registration, and administration.
 
 **Enabling tools:**
 
@@ -387,12 +387,12 @@ play_emotion
 # My custom tool defined locally
 sweep_look
 ```
-Tools are resolved first from Python files in the profile folder (custom tools), then from the core library `src/reachy_mini_conversation_app/tools/` (like `dance`, `head_tracking`).
+Tools are resolved first from Python files in the profile folder (custom tools), then from the core library `src/xiaoze_conversation_app/tools/` (like `dance`, `head_tracking`).
 
 **Custom tools:**
 
 On top of built-in tools found in the core library, you can implement custom tools specific to your profile by adding Python files in the profile folder.
-Custom tools must subclass `reachy_mini_conversation_app.tools.core_tools.Tool`.
+Custom tools must subclass `xiaoze_conversation_app.tools.core_tools.Tool`.
 
 **Edit personalities from the UI:**
 
@@ -408,7 +408,7 @@ Note: The "Personality" panel updates the conversation instructions. Tool sets a
 <details>
 <summary><b>Locked profile mode</b></summary>
 
-To create a locked variant of the app that cannot switch profiles, edit `src/reachy_mini_conversation_app/config.py` and set the `LOCKED_PROFILE` constant to the desired profile name:
+To create a locked variant of the app that cannot switch profiles, edit `src/xiaoze_conversation_app/config.py` and set the `LOCKED_PROFILE` constant to the desired profile name:
 ```python
 LOCKED_PROFILE: str | None = "前台接待"  # Lock to this profile
 ```
@@ -423,7 +423,7 @@ This is useful for creating dedicated clones of the app with a fixed personality
 You can extend the app with profiles/tools stored outside the repository defaults.
 
 - Core profiles are under `profiles/`.
-- Core tools are under `src/reachy_mini_conversation_app/tools/`.
+- Core tools are under `src/xiaoze_conversation_app/tools/`.
 
 **Recommended layout:**
 
@@ -453,7 +453,7 @@ REACHY_MINI_EXTERNAL_TOOLS_DIRECTORY=./external_content/external_tools
 
 **Loading behavior:**
 
-- **Default/strict mode**: `tools.txt` defines enabled tools explicitly. Every name in `tools.txt` must resolve to either a built-in tool (`src/reachy_mini_conversation_app/tools/`) or an external tool module in `REACHY_MINI_EXTERNAL_TOOLS_DIRECTORY`.
+- **Default/strict mode**: `tools.txt` defines enabled tools explicitly. Every name in `tools.txt` must resolve to either a built-in tool (`src/xiaoze_conversation_app/tools/`) or an external tool module in `REACHY_MINI_EXTERNAL_TOOLS_DIRECTORY`.
 - **Convenience mode** (`AUTOLOAD_EXTERNAL_TOOLS=1`): all valid `*.py` tool files in `REACHY_MINI_EXTERNAL_TOOLS_DIRECTORY` are auto-added.
 - **External profile fallback**: if the selected external profile has no `tools.txt`, the app falls back to built-in `profiles/default/tools.txt`.
 
@@ -469,7 +469,7 @@ This supports both:
 If you run multiple Reachy Mini daemons on the same network, use:
 
 ```bash
-reachy-mini-conversation-app --robot-name <name>
+xiaoze-conversation-app --robot-name <name>
 ```
 
 `<name>` must match the daemon's `--robot-name` value so the app connects to the correct robot.

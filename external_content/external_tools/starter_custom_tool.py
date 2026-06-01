@@ -1,9 +1,9 @@
-"""Example external tool implementation."""
+﻿"""Example external tool implementation."""
 
 import logging
 from typing import Any, Dict
 
-from reachy_mini_conversation_app.tools.core_tools import Tool, ToolDependencies
+from xiaoze_conversation_app.tools.core_tools import Tool, ToolDependencies
 
 
 logger = logging.getLogger(__name__)

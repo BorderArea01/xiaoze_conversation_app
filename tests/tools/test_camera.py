@@ -1,4 +1,4 @@
-"""Tests for the camera tool."""
+﻿"""Tests for the camera tool."""
 
 import base64
 from io import BytesIO
@@ -8,8 +8,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from reachy_mini_conversation_app.tools.camera import Camera
-from reachy_mini_conversation_app.tools.core_tools import ToolDependencies
+from xiaoze_conversation_app.tools.camera import Camera
+from xiaoze_conversation_app.tools.core_tools import ToolDependencies
 
 
 @pytest.mark.asyncio

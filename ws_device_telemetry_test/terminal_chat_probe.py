@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 import os
 import sys
 import json
@@ -6,7 +6,7 @@ import asyncio
 
 import websockets
 
-from reachy_mini_conversation_app.platform_client import _is_terminal_response_end
+from xiaoze_conversation_app.platform_client import _is_terminal_response_end
 
 
 TERMINAL_ID = "reachy-mini-001"

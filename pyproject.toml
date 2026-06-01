@@ -1,9 +1,9 @@
-[build-system]
+﻿[build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "reachy_mini_conversation_app"
+name = "xiaoze_conversation_app"
 version = "0.6.2"
 authors = [{ name = "Pollen Robotics", email = "contact@pollen-robotics.com" }]
 description = ""
@@ -73,7 +73,7 @@ dev = [
 ]
 
 [project.scripts]
-reachy-mini-conversation-app = "reachy_mini_conversation_app.main:main"
+xiaoze-conversation-app = "xiaoze_conversation_app.main:main"
 
 [tool.uv]
 dependency-metadata = [
@@ -82,8 +82,8 @@ dependency-metadata = [
     { name = "gstreamer-libs", version = "1.28.1", requires-dist = ["gstreamer-msvc-runtime; sys_platform == 'win32'", "setuptools"] },
 ]
 
-[project.entry-points."reachy_mini_apps"]
-reachy_mini_conversation_app = "reachy_mini_conversation_app.main:ReachyMiniConversationApp"
+[project.entry-points."xiaoze_apps"]
+xiaoze_conversation_app = "xiaoze_conversation_app.main:XiaozeConversationApp"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -93,7 +93,7 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-reachy_mini_conversation_app = [
+xiaoze_conversation_app = [
   "images/*",
   "static/*",
   ".env.example",
@@ -101,7 +101,7 @@ reachy_mini_conversation_app = [
   "prompts_library/*.txt",
   "prompts/**/*.txt",
 ]
-reachy_talk_data = [
+xiaoze_talk_data = [
   "profiles/**/*.txt",
   "profiles/**/*.py",
 ]
@@ -130,7 +130,7 @@ ignore = [
 length-sort = true
 lines-after-imports = 2
 no-lines-before = ["standard-library", "local-folder"]
-known-local-folder = ["reachy_mini_conversation_app"]
+known-local-folder = ["xiaoze_conversation_app"]
 known-first-party = ["reachy_mini", "reachy_mini_dances_library", "reachy_mini_toolbox"]
 split-on-trailing-comma = true
 

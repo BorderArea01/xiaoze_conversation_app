@@ -1,4 +1,4 @@
-"""Behavior tests for the Gemini Live handler."""
+﻿"""Behavior tests for the Gemini Live handler."""
 
 import base64
 import asyncio
@@ -10,12 +10,12 @@ import numpy as np
 import pytest
 from fastrtc import AdditionalOutputs
 
-import reachy_mini_conversation_app.gemini_live as gemini_mod
-import reachy_mini_conversation_app.tools.core_tools as ct_mod
-from reachy_mini_conversation_app.gemini_live import GeminiLiveHandler
-from reachy_mini_conversation_app.tools.core_tools import ToolDependencies
-from reachy_mini_conversation_app.tools.tool_constants import ToolState
-from reachy_mini_conversation_app.tools.background_tool_manager import ToolNotification
+import xiaoze_conversation_app.gemini_live as gemini_mod
+import xiaoze_conversation_app.tools.core_tools as ct_mod
+from xiaoze_conversation_app.gemini_live import GeminiLiveHandler
+from xiaoze_conversation_app.tools.core_tools import ToolDependencies
+from xiaoze_conversation_app.tools.tool_constants import ToolState
+from xiaoze_conversation_app.tools.background_tool_manager import ToolNotification
 
 
 def _server_content(**kwargs: Any) -> SimpleNamespace:
@@ -246,7 +246,7 @@ async def test_apply_personality_preserves_manual_voice_override(monkeypatch) ->
     """Applying a profile should keep a manually selected Gemini voice active."""
     monkeypatch.setattr(gemini_mod, "get_session_instructions", lambda: "test")
     monkeypatch.setattr(gemini_mod, "get_session_voice", lambda: "Kore")
-    monkeypatch.setattr("reachy_mini_conversation_app.config.set_custom_profile", lambda _profile: None)
+    monkeypatch.setattr("xiaoze_conversation_app.config.set_custom_profile", lambda _profile: None)
 
     handler = GeminiLiveHandler(ToolDependencies(reachy_mini=MagicMock(), movement_manager=MagicMock()))
     handler.session = object()

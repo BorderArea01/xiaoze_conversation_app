@@ -1,4 +1,4 @@
-{
+﻿{
   "deviceId": "reachy-mini-dev-laptop",
   "deviceName": "Reachy Mini Conversation Laptop",
   "deviceSn": "DEV-LAPTOP-001",
@@ -17,7 +17,7 @@
   },
   "metrics": {
     "loadAverage": 0.92,
-    "appName": "reachy_mini_conversation_app",
+    "appName": "xiaoze_conversation_app",
     "appVersion": "0.6.2",
     "backendProvider": "openai_compatible_chat",
     "asrModel": "qwen-audio-asr",

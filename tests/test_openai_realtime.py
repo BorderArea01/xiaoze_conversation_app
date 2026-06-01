@@ -1,4 +1,4 @@
-import random
+﻿import random
 import asyncio
 import logging
 from types import SimpleNamespace
@@ -9,14 +9,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastrtc import AdditionalOutputs
 
-import reachy_mini_conversation_app.base_realtime as base_rt_mod
-import reachy_mini_conversation_app.openai_realtime as rt_mod
-import reachy_mini_conversation_app.tools.core_tools as ct_mod
-import reachy_mini_conversation_app.tools.background_tool_manager as btm_mod
-from reachy_mini_conversation_app.config import OPENAI_BACKEND, config, get_default_voice_for_backend
-from reachy_mini_conversation_app.openai_realtime import OpenaiRealtimeHandler
-from reachy_mini_conversation_app.tools.core_tools import ToolDependencies
-from reachy_mini_conversation_app.tools.background_tool_manager import ToolCallRoutine
+import xiaoze_conversation_app.base_realtime as base_rt_mod
+import xiaoze_conversation_app.openai_realtime as rt_mod
+import xiaoze_conversation_app.tools.core_tools as ct_mod
+import xiaoze_conversation_app.tools.background_tool_manager as btm_mod
+from xiaoze_conversation_app.config import OPENAI_BACKEND, config, get_default_voice_for_backend
+from xiaoze_conversation_app.openai_realtime import OpenaiRealtimeHandler
+from xiaoze_conversation_app.tools.core_tools import ToolDependencies
+from xiaoze_conversation_app.tools.background_tool_manager import ToolCallRoutine
 
 
 OPENAI_DEFAULT_VOICE = get_default_voice_for_backend(OPENAI_BACKEND)
@@ -452,7 +452,7 @@ async def test_apply_personality_preserves_manual_voice_override(monkeypatch: An
     """Applying a profile should not discard a voice manually selected in the current session."""
     monkeypatch.setattr(rt_mod, "get_session_instructions", lambda: "test")
     monkeypatch.setattr(rt_mod, "get_session_voice", lambda: "cedar")
-    monkeypatch.setattr("reachy_mini_conversation_app.config.set_custom_profile", lambda _profile: None)
+    monkeypatch.setattr("xiaoze_conversation_app.config.set_custom_profile", lambda _profile: None)
 
     handler = OpenaiRealtimeHandler(ToolDependencies(reachy_mini=MagicMock(), movement_manager=MagicMock()))
     update = AsyncMock()

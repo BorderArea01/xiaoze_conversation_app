@@ -1,9 +1,9 @@
-"""Tests for Reachy Mini audio startup configuration."""
+﻿"""Tests for Reachy Mini audio startup configuration."""
 
 from __future__ import annotations
 from types import SimpleNamespace
 
-from reachy_mini_conversation_app.audio.startup_config import (
+from xiaoze_conversation_app.audio.startup_config import (
     AUDIO_STARTUP_CONFIG,
     WRITE_SETTLE_SECONDS,
     apply_audio_startup_config,

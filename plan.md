@@ -1,4 +1,4 @@
-# Reachy Mini Conversation App Build/Deploy Plan
+﻿# Reachy Mini Conversation App Build/Deploy Plan
 
 ## Goal
 
@@ -15,9 +15,9 @@ This project is a Python Reachy Mini app, not a static JS app. It needs local ro
 
 ## Implementation Notes
 
-- Python app entry point is `ReachyMiniConversationApp`.
-- Package entry point is declared in `pyproject.toml` under `reachy_mini_apps`.
-- Runtime settings UI lives inside `src/reachy_mini_conversation_app/static`.
+- Python app entry point is `XiaozeConversationApp`.
+- Package entry point is declared in `pyproject.toml` under `xiaoze_apps`.
+- Runtime settings UI lives inside `src/xiaoze_conversation_app/static`.
 - Platform agent settings are stored in the per-instance `.env` by the settings UI.
 - Secrets must not be committed; use local `.env`, dashboard settings, or Hugging Face Space secrets.
 

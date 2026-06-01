@@ -1,11 +1,11 @@
-import logging
+﻿import logging
 from typing import Any, Dict
 
 import numpy as np
 
 from reachy_mini.utils import create_head_pose
-from reachy_mini_conversation_app.tools.core_tools import Tool, ToolDependencies
-from reachy_mini_conversation_app.dance_emotion_moves import GotoQueueMove
+from xiaoze_conversation_app.tools.core_tools import Tool, ToolDependencies
+from xiaoze_conversation_app.dance_emotion_moves import GotoQueueMove
 
 
 logger = logging.getLogger(__name__)

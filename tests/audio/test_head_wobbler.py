@@ -1,4 +1,4 @@
-"""Regression tests for the audio-driven head wobble behaviour."""
+﻿"""Regression tests for the audio-driven head wobble behaviour."""
 
 import math
 import time
@@ -10,7 +10,7 @@ from collections.abc import Callable
 import numpy as np
 from numpy.typing import NDArray
 
-from reachy_mini_conversation_app.audio.head_wobbler import HeadWobbler
+from xiaoze_conversation_app.audio.head_wobbler import HeadWobbler
 
 
 def _make_audio_chunk(duration_s: float = 0.3, frequency_hz: float = 220.0) -> str:

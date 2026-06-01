@@ -1,4 +1,4 @@
-"""Tests for BackgroundToolManager."""
+﻿"""Tests for BackgroundToolManager."""
 
 from __future__ import annotations
 import asyncio
@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from reachy_mini_conversation_app.tools.tool_constants import ToolState
-from reachy_mini_conversation_app.tools.background_tool_manager import (
+from xiaoze_conversation_app.tools.tool_constants import ToolState
+from xiaoze_conversation_app.tools.background_tool_manager import (
     ToolProgress,
     BackgroundTool,
     ToolCallRoutine,
