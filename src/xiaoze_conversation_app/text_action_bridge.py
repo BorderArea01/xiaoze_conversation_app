@@ -1,4 +1,4 @@
-﻿"""Local action bridge for typed chat commands."""
+"""Local action bridge for typed chat commands."""
 
 from __future__ import annotations
 import re
@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from xiaoze_conversation_app.tools.dance import AVAILABLE_MOVES, DANCE_AVAILABLE
 from xiaoze_conversation_app.tools.core_tools import ToolDependencies, dispatch_tool_call
-from xiaoze_conversation_app.tools.play_emotion import RECORDED_MOVES, EMOTION_AVAILABLE
+from xiaoze_conversation_app.tools.play_emotion import _get_recorded_moves
 
 
 @dataclass(frozen=True)
@@ -64,10 +64,11 @@ HEAD_DIRECTIONS = {
 
 
 def _available_emotions() -> list[str]:
-    if not EMOTION_AVAILABLE or RECORDED_MOVES is None:
+    rm = _get_recorded_moves()
+    if rm is None:
         return []
     try:
-        return list(RECORDED_MOVES.list_moves())
+        return list(rm.list_moves())
     except Exception:
         return []
 

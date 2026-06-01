@@ -1,39 +1,54 @@
-﻿import random
+import random
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from xiaoze_conversation_app.tools.core_tools import Tool, ToolDependencies
 
 
 logger = logging.getLogger(__name__)
 
-# Initialize emotion library
-try:
-    from reachy_mini.motion.recorded_move import RecordedMoves
-    from xiaoze_conversation_app.dance_emotion_moves import EmotionQueueMove
+# Lazy-loaded emotion library
+_RECORDED_MOVES: Any = None
+_EMOTION_LIBRARY_ERROR: Optional[str] = None
 
-    # Note: huggingface_hub automatically reads HF_TOKEN from environment variables
-    RECORDED_MOVES = RecordedMoves("pollen-robotics/reachy-mini-emotions-library")
-    EMOTION_AVAILABLE = True
-except ImportError as e:
-    logger.warning(f"Emotion library not available: {e}")
-    RECORDED_MOVES = None
-    EMOTION_AVAILABLE = False
+
+def _get_recorded_moves():
+    """Lazily initialize the emotion library on first use."""
+    global _RECORDED_MOVES, _EMOTION_LIBRARY_ERROR
+    if _RECORDED_MOVES is not None:
+        return _RECORDED_MOVES
+    if _EMOTION_LIBRARY_ERROR is not None:
+        return None
+    try:
+        from reachy_mini.motion.recorded_move import RecordedMoves
+        from xiaoze_conversation_app.dance_emotion_moves import EmotionQueueMove
+
+        _RECORDED_MOVES = RecordedMoves("pollen-robotics/reachy-mini-emotions-library")
+        return _RECORDED_MOVES
+    except ImportError as e:
+        _EMOTION_LIBRARY_ERROR = f"Emotion library not available: {e}"
+        logger.warning(_EMOTION_LIBRARY_ERROR)
+        return None
+    except Exception as e:
+        _EMOTION_LIBRARY_ERROR = f"Emotion library init failed: {e}"
+        logger.warning(_EMOTION_LIBRARY_ERROR)
+        return None
 
 
 def get_available_emotions_and_descriptions() -> str:
     """Get formatted list of available emotions with descriptions."""
-    if not EMOTION_AVAILABLE:
+    rm = _get_recorded_moves()
+    if rm is None:
         return "Emotions not available"
 
     try:
-        emotion_names = RECORDED_MOVES.list_moves()
+        emotion_names = rm.list_moves()
         if not emotion_names:
             return "No emotions currently available"
 
         output = "Available emotions:\n"
         for name in emotion_names:
-            description = RECORDED_MOVES.get(name).description
+            description = rm.get(name).description
             output += f" - {name}: {description}\n"
         return output
     except Exception as e:
@@ -45,33 +60,38 @@ class PlayEmotion(Tool):
 
     name = "play_emotion"
     description = "Play a pre-recorded emotion"
-    parameters_schema = {
-        "type": "object",
-        "properties": {
-            "emotion": {
-                "type": "string",
-                "enum": list(RECORDED_MOVES.list_moves()) if EMOTION_AVAILABLE else [],
-                "description": f"""Name of the emotion to play; omit for random.
+
+    @property
+    def parameters_schema(self) -> Dict[str, Any]:
+        rm = _get_recorded_moves()
+        emotion_names = rm.list_moves() if rm is not None else []
+        return {
+            "type": "object",
+            "properties": {
+                "emotion": {
+                    "type": "string",
+                    "enum": emotion_names,
+                    "description": f"""Name of the emotion to play; omit for random.
                                     Here is a list of the available emotions, you MUST only choose from these: \n
-                                    {get_available_emotions_and_descriptions()}
+                                    {get_available_emotions_and_descriptions() if emotion_names else '(none available)'}
                                     """,
+                },
             },
-        },
-        "required": [],
-    }
+            "required": [],
+        }
 
     async def __call__(self, deps: ToolDependencies, **kwargs: Any) -> Dict[str, Any]:
         """Play a pre-recorded emotion."""
-        if not EMOTION_AVAILABLE:
+        rm = _get_recorded_moves()
+        if rm is None:
             return {"error": "Emotion system not available"}
 
         emotion_name = kwargs.get("emotion")
 
         logger.info("Tool call: play_emotion emotion=%s", emotion_name)
 
-        # Check if emotion exists
         try:
-            emotion_names = RECORDED_MOVES.list_moves()
+            emotion_names = rm.list_moves()
             if not emotion_names:
                 return {"error": "No emotions currently available"}
 
@@ -81,9 +101,10 @@ class PlayEmotion(Tool):
             if emotion_name not in emotion_names:
                 return {"error": f"Unknown emotion '{emotion_name}'. Available: {emotion_names}"}
 
-            # Add emotion to queue
+            from xiaoze_conversation_app.dance_emotion_moves import EmotionQueueMove
+
             movement_manager = deps.movement_manager
-            emotion_move = EmotionQueueMove(emotion_name, RECORDED_MOVES)
+            emotion_move = EmotionQueueMove(emotion_name, rm)
             movement_manager.queue_move(emotion_move)
 
             return {"status": "queued", "emotion": emotion_name}

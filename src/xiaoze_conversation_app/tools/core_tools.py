@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 import re
 import abc
 import sys
@@ -274,11 +274,21 @@ def _initialize_tools() -> None:
     _TOOLS_INITIALIZED = True
 
 
-_initialize_tools()
+def ensure_tools_initialized() -> None:
+    """Public entry point to initialize tools. Call before using tool specs or dispatching tool calls.
+
+    Safe to call multiple times — subsequent calls are no-ops.
+    """
+    _initialize_tools()
+
+
+# Back-compat alias for internal lazy guards
+_ensure_initialized = ensure_tools_initialized
 
 
 def get_tool_specs(exclusion_list: list[str] = []) -> list[Dict[str, Any]]:
     """Get tool specs, optionally excluding some tools."""
+    _ensure_initialized()
     return [spec for spec in ALL_TOOL_SPECS if spec.get("name") not in exclusion_list]
 
 
@@ -317,6 +327,7 @@ async def _dispatch_tool_call(tool_name: str, args: Dict[str, Any], deps: ToolDe
 
 async def dispatch_tool_call(tool_name: str, args_json: str, deps: ToolDependencies) -> Dict[str, Any]:
     """Dispatch a tool call by name with JSON args and dependencies."""
+    _ensure_initialized()
     return await _dispatch_tool_call(tool_name, _safe_load_obj(args_json), deps)
 
 
@@ -324,6 +335,7 @@ async def dispatch_tool_call_with_manager(
     tool_name: str, args_json: str, deps: ToolDependencies, tool_manager: "BackgroundToolManager"
 ) -> Dict[str, Any]:
     """Dispatch a tool call, injecting a BackgroundToolManager into the args."""
+    _ensure_initialized()
     args = _safe_load_obj(args_json)
     args["tool_manager"] = tool_manager
     return await _dispatch_tool_call(tool_name, args, deps)

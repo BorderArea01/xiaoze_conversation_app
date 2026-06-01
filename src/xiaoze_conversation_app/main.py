@@ -159,7 +159,7 @@ def run(
         PlatformService,
         PlatformClientConfig,
     )
-    from xiaoze_conversation_app.tools.core_tools import ToolDependencies
+    from xiaoze_conversation_app.tools.core_tools import ToolDependencies, ensure_tools_initialized
     from xiaoze_conversation_app.audio.head_wobbler import HeadWobbler
 
     if args.no_camera and args.head_tracker is not None:
@@ -238,6 +238,7 @@ def run(
         vision_processor=vision_processor,
         head_wobbler=head_wobbler,
     )
+    ensure_tools_initialized()
     current_file_path = os.path.dirname(os.path.abspath(__file__))
     logger.debug(f"Current file absolute path: {current_file_path}")
     chatbot = gr.Chatbot(
