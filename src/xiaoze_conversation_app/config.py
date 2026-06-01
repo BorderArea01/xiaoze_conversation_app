@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 import logging
 from pathlib import Path
@@ -91,7 +91,8 @@ OPENAI_COMPATIBLE_CHAT_BACKEND = "openai_compatible_chat"
 PLATFORM_AGENT_BACKEND = "platform_agent"
 GEMINI_BACKEND = "gemini"
 HF_BACKEND = "huggingface"
-DEFAULT_BACKEND_PROVIDER = HF_BACKEND
+COMPOSED_BACKEND = "composed"
+DEFAULT_BACKEND_PROVIDER = COMPOSED_BACKEND
 HF_REALTIME_CONNECTION_MODE_ENV = "HF_REALTIME_CONNECTION_MODE"
 HF_REALTIME_WS_URL_ENV = "HF_REALTIME_WS_URL"
 HF_LOCAL_CONNECTION_MODE = "local"
@@ -122,6 +123,7 @@ DEFAULT_MODEL_NAME_BY_BACKEND = {
     PLATFORM_AGENT_BACKEND: "",
     GEMINI_BACKEND: "gemini-3.1-flash-live-preview",
     HF_BACKEND: HF_DEFAULTS.model_name,
+    COMPOSED_BACKEND: "",
 }
 BACKEND_LABEL_BY_PROVIDER = {
     OPENAI_BACKEND: "OpenAI Realtime",
@@ -130,7 +132,9 @@ BACKEND_LABEL_BY_PROVIDER = {
     PLATFORM_AGENT_BACKEND: "Platform Agent + ASR/TTS",
     GEMINI_BACKEND: "Gemini Live",
     HF_BACKEND: "Hugging Face",
+    COMPOSED_BACKEND: "ASR+LLM+TTS 自由搭配",
 }
+COMPOSED_VOICE_DEFAULT = "alloy"
 DEFAULT_VOICE_BY_BACKEND = {
     OPENAI_BACKEND: OPENAI_DEFAULT_VOICE,
     OPENAI_COMPATIBLE_BACKEND: OPENAI_DEFAULT_VOICE,
@@ -138,6 +142,7 @@ DEFAULT_VOICE_BY_BACKEND = {
     PLATFORM_AGENT_BACKEND: OPENAI_DEFAULT_VOICE,
     GEMINI_BACKEND: "Kore",
     HF_BACKEND: HF_DEFAULTS.voice,
+    COMPOSED_BACKEND: COMPOSED_VOICE_DEFAULT,
 }
 
 logger = logging.getLogger(__name__)
@@ -397,6 +402,24 @@ class Config:
     OPENAI_COMPATIBLE_TURN_SILENCE_MS = int(os.getenv("OPENAI_COMPATIBLE_TURN_SILENCE_MS", "900"))
     OPENAI_COMPATIBLE_VAD_THRESHOLD = float(os.getenv("OPENAI_COMPATIBLE_VAD_THRESHOLD", "0.012"))
 
+    # Per-component providers (used when BACKEND_PROVIDER = "composed")
+    _fallback_url = OPENAI_COMPATIBLE_BASE_URL or ""
+    ASR_PROVIDER = (os.getenv("ASR_PROVIDER") or "openai").strip().lower()
+    ASR_BASE_URL = (os.getenv("ASR_BASE_URL") or _fallback_url or "").strip()
+    ASR_MODEL = (os.getenv("ASR_MODEL") or "gpt-4o-transcribe").strip()
+    ASR_LANGUAGE = (os.getenv("ASR_LANGUAGE") or "").strip()
+    LLM_PROVIDER = (os.getenv("LLM_PROVIDER") or "openai").strip().lower()
+    LLM_BASE_URL = (os.getenv("LLM_BASE_URL") or _fallback_url or "").strip()
+    LLM_MODEL = (os.getenv("LLM_MODEL") or MODEL_NAME or "gpt-4o").strip()
+    TTS_PROVIDER = (os.getenv("TTS_PROVIDER") or "openai").strip().lower()
+    TTS_BASE_URL = (os.getenv("TTS_BASE_URL") or _fallback_url or "").strip()
+    TTS_MODEL = (os.getenv("TTS_MODEL") or "tts-1").strip()
+    TTS_VOICE = (os.getenv("TTS_VOICE") or OPENAI_COMPATIBLE_VOICE or "").strip()
+    TTS_SAMPLE_RATE = int(os.getenv("TTS_SAMPLE_RATE", os.getenv("OPENAI_COMPATIBLE_TTS_SAMPLE_RATE", "24000")))
+    TTS_RESPONSE_FORMAT = (os.getenv("TTS_RESPONSE_FORMAT") or os.getenv("OPENAI_COMPATIBLE_TTS_RESPONSE_FORMAT", "pcm")).strip().lower()
+    VAD_THRESHOLD = float(os.getenv("VAD_THRESHOLD", os.getenv("OPENAI_COMPATIBLE_VAD_THRESHOLD", "0.012")))
+    TURN_SILENCE_MS = int(os.getenv("TURN_SILENCE_MS", os.getenv("OPENAI_COMPATIBLE_TURN_SILENCE_MS", "900")))
+
     logger.debug(
         "Backend provider: %s, Model: %s, HF mode: %s, HF session URL set: %s, HF direct URL set: %s, HF_HOME: %s, Vision Model: %s",
         BACKEND_PROVIDER,
@@ -518,6 +541,24 @@ def refresh_runtime_config_from_env() -> None:
     config.OPENAI_COMPATIBLE_VAD_THRESHOLD = float(os.getenv("OPENAI_COMPATIBLE_VAD_THRESHOLD", "0.012"))
     config.REACHY_MINI_CUSTOM_PROFILE = LOCKED_PROFILE or os.getenv("REACHY_MINI_CUSTOM_PROFILE")
 
+    # Per-component runtime refresh
+    _rt_fallback = config.OPENAI_COMPATIBLE_BASE_URL or ""
+    config.ASR_PROVIDER = (os.getenv("ASR_PROVIDER") or "openai").strip().lower()
+    config.ASR_BASE_URL = (os.getenv("ASR_BASE_URL") or _rt_fallback or "").strip()
+    config.ASR_MODEL = (os.getenv("ASR_MODEL") or "gpt-4o-transcribe").strip()
+    config.ASR_LANGUAGE = (os.getenv("ASR_LANGUAGE") or "").strip()
+    config.LLM_PROVIDER = (os.getenv("LLM_PROVIDER") or "openai").strip().lower()
+    config.LLM_BASE_URL = (os.getenv("LLM_BASE_URL") or _rt_fallback or "").strip()
+    config.LLM_MODEL = (os.getenv("LLM_MODEL") or config.MODEL_NAME or "gpt-4o").strip()
+    config.TTS_PROVIDER = (os.getenv("TTS_PROVIDER") or "openai").strip().lower()
+    config.TTS_BASE_URL = (os.getenv("TTS_BASE_URL") or _rt_fallback or "").strip()
+    config.TTS_MODEL = (os.getenv("TTS_MODEL") or "tts-1").strip()
+    config.TTS_VOICE = (os.getenv("TTS_VOICE") or getattr(config, "OPENAI_COMPATIBLE_VOICE", "") or "").strip()
+    config.TTS_SAMPLE_RATE = int(os.getenv("TTS_SAMPLE_RATE", os.getenv("OPENAI_COMPATIBLE_TTS_SAMPLE_RATE", "24000")))
+    config.TTS_RESPONSE_FORMAT = (os.getenv("TTS_RESPONSE_FORMAT") or os.getenv("OPENAI_COMPATIBLE_TTS_RESPONSE_FORMAT", "pcm")).strip().lower()
+    config.VAD_THRESHOLD = float(os.getenv("VAD_THRESHOLD", os.getenv("OPENAI_COMPATIBLE_VAD_THRESHOLD", "0.012")))
+    config.TURN_SILENCE_MS = int(os.getenv("TURN_SILENCE_MS", os.getenv("OPENAI_COMPATIBLE_TURN_SILENCE_MS", "900")))
+
 
 def get_backend_choice(model_name: str | None = None) -> str:
     """Return the configured backend family."""
@@ -544,8 +585,8 @@ def get_available_voices_for_backend(backend: str | None = None) -> list[str]:
         return list(GEMINI_AVAILABLE_VOICES)
     if normalized_backend == HF_BACKEND:
         return list(HF_AVAILABLE_VOICES)
-    if normalized_backend in {OPENAI_COMPATIBLE_BACKEND, OPENAI_COMPATIBLE_CHAT_BACKEND, PLATFORM_AGENT_BACKEND}:
-        configured_voice = (getattr(config, "OPENAI_COMPATIBLE_VOICE", None) or "").strip()
+    if normalized_backend in {OPENAI_COMPATIBLE_BACKEND, OPENAI_COMPATIBLE_CHAT_BACKEND, PLATFORM_AGENT_BACKEND, COMPOSED_BACKEND}:
+        configured_voice = (getattr(config, "TTS_VOICE", None) or getattr(config, "OPENAI_COMPATIBLE_VOICE", None) or "").strip()
         voices = list(AVAILABLE_VOICES)
         if configured_voice and configured_voice not in voices:
             voices.insert(0, configured_voice)
@@ -556,8 +597,8 @@ def get_available_voices_for_backend(backend: str | None = None) -> list[str]:
 def get_default_voice_for_backend(backend: str | None = None) -> str:
     """Return the default voice for a backend selector value."""
     normalized_backend = get_backend_choice() if backend is None else _normalize_backend_provider(backend)
-    if normalized_backend in {OPENAI_COMPATIBLE_BACKEND, OPENAI_COMPATIBLE_CHAT_BACKEND, PLATFORM_AGENT_BACKEND}:
-        configured_voice = (getattr(config, "OPENAI_COMPATIBLE_VOICE", None) or "").strip()
+    if normalized_backend in {OPENAI_COMPATIBLE_BACKEND, OPENAI_COMPATIBLE_CHAT_BACKEND, PLATFORM_AGENT_BACKEND, COMPOSED_BACKEND}:
+        configured_voice = (getattr(config, "TTS_VOICE", None) or getattr(config, "OPENAI_COMPATIBLE_VOICE", None) or "").strip()
         return configured_voice or DEFAULT_VOICE_BY_BACKEND[normalized_backend]
     return DEFAULT_VOICE_BY_BACKEND[normalized_backend]
 

@@ -1,4 +1,4 @@
-﻿"""Entrypoint for the Reachy Mini conversation app."""
+"""Entrypoint for the Reachy Mini conversation app."""
 
 import os
 import sys
@@ -12,7 +12,6 @@ from pathlib import Path
 import gradio as gr
 from fastapi import FastAPI, Request
 from fastrtc import Stream
-from gradio.utils import get_space
 from fastapi.responses import JSONResponse
 
 from reachy_mini import ReachyMini, ReachyMiniApp
@@ -103,6 +102,7 @@ def run(
         GEMINI_BACKEND,
         OPENAI_BACKEND,
         PLATFORM_AGENT_BACKEND,
+        COMPOSED_BACKEND,
         HF_LOCAL_CONNECTION_MODE,
         OPENAI_COMPATIBLE_BACKEND,
         OPENAI_COMPATIBLE_CHAT_BACKEND,
@@ -251,7 +251,22 @@ def run(
     )
     logger.debug(f"Chatbot avatar images: {chatbot.avatar_images}")
 
-    if is_gemini_model():
+    if config.BACKEND_PROVIDER == COMPOSED_BACKEND:
+        from xiaoze_conversation_app.composed_chat import ComposedChatHandler
+
+        logger.info(
+            "Using ASR+LLM+TTS composed handler (ASR=%s LLM=%s TTS=%s)",
+            config.ASR_PROVIDER,
+            config.LLM_PROVIDER,
+            config.TTS_PROVIDER,
+        )
+        handler = ComposedChatHandler(
+            deps,
+            gradio_mode=args.gradio,
+            instance_path=instance_path,
+            startup_voice=startup_settings.voice,
+        )
+    elif is_gemini_model():
         from xiaoze_conversation_app.gemini_live import GeminiLiveHandler
 
         logger.info(
@@ -345,17 +360,6 @@ def run(
         personality_ui = PersonalityUI()
         personality_ui.create_components()
         additional_inputs: list[Any] = [chatbot, *personality_ui.additional_inputs_ordered()]
-
-        if config.BACKEND_PROVIDER in {OPENAI_BACKEND, GEMINI_BACKEND}:
-            uses_gemini_backend = is_gemini_model()
-            api_key_textbox = gr.Textbox(
-                label="GEMINI_API_KEY" if uses_gemini_backend else "OPENAI API Key",
-                type="password",
-                value=(os.getenv("GEMINI_API_KEY") if uses_gemini_backend else os.getenv("OPENAI_API_KEY"))
-                if not get_space()
-                else "",
-            )
-            additional_inputs.insert(1, api_key_textbox)
 
         stream = Stream(
             handler=handler,
@@ -463,6 +467,7 @@ def run(
                     outputs=typed_answer,
                     api_name="platform_chat",
                 )
+            personality_ui.create_config_accordions(stream_manager, instance_path)
             stream_manager.load(fn=None, js=GRADIO_LOCALIZATION_JS)
         if not settings_app:
             app = FastAPI()

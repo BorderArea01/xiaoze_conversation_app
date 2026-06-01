@@ -143,6 +143,23 @@ def setup_logger(debug: bool) -> logging.Logger:
     return logger
 
 
+def ensure_localhost_bypasses_proxy() -> None:
+    """Ensure localhost URLs bypass any configured HTTP proxy."""
+    import os as _os
+    proxy = _os.getenv("HTTP_PROXY") or _os.getenv("http_proxy") or _os.getenv("HTTPS_PROXY") or _os.getenv("https_proxy")
+    if not proxy:
+        return
+    no_proxy = _os.getenv("NO_PROXY", "") or _os.getenv("no_proxy", "")
+    localhost_entries = {"127.0.0.1", "localhost", "::1"}
+    existing = {e.strip().lower() for e in no_proxy.split(",") if e.strip()}
+    added = localhost_entries - existing
+    if added:
+        entries = sorted(existing | added)
+        new_no_proxy = ",".join(entries)
+        _os.environ["NO_PROXY"] = new_no_proxy
+        _os.environ["no_proxy"] = new_no_proxy
+
+
 def log_connection_troubleshooting(logger: logging.Logger, robot_name: Optional[str]) -> None:
     """Log troubleshooting steps for connection issues."""
     logger.error("Troubleshooting steps:")

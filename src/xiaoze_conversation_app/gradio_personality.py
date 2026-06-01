@@ -1,8 +1,4 @@
-﻿"""Gradio personality UI components and wiring.
-
-This module encapsulates the UI elements and logic related to managing
-conversation "personalities" (profiles) so that `main.py` stays lean.
-"""
+"""Simplified Gradio personality UI + ASR/LLM/TTS config panels."""
 
 from __future__ import annotations
 from typing import Any
@@ -20,30 +16,41 @@ from xiaoze_conversation_app.config import (
 
 
 class PersonalityUI:
-    """Container for personality-related Gradio components."""
+    """Simplified personality + config UI components."""
 
     def __init__(self) -> None:
-        """Initialize the PersonalityUI instance."""
-        # Constants and paths
         self.DEFAULT_OPTION = "(built-in default)"
         self._profiles_root = DEFAULT_PROFILES_DIRECTORY
-        self._tools_dir = Path(__file__).parent / "tools"
         self._prompts_dir = Path(__file__).parent / "prompts"
 
-        # Components (initialized in create_components)
         self.personalities_dropdown: gr.Dropdown
         self.apply_btn: gr.Button
         self.status_md: gr.Markdown
         self.preview_md: gr.Markdown
-        self.person_name_tb: gr.Textbox
-        self.person_instr_ta: gr.TextArea
-        self.tools_txt_ta: gr.TextArea
         self.voice_dropdown: gr.Dropdown
-        self.new_personality_btn: gr.Button
-        self.available_tools_cg: gr.CheckboxGroup
-        self.save_btn: gr.Button
 
-    # ---------- Filesystem helpers ----------
+        # Config accordion components
+        self.asr_url_tb: gr.Textbox
+        self.asr_model_tb: gr.Textbox
+        self.asr_lang_tb: gr.Textbox
+        self.asr_status_md: gr.Markdown
+        self.asr_save_btn: gr.Button
+
+        self.llm_url_tb: gr.Textbox
+        self.llm_model_tb: gr.Textbox
+        self.llm_status_md: gr.Markdown
+        self.llm_save_btn: gr.Button
+
+        self.tts_url_tb: gr.Textbox
+        self.tts_model_tb: gr.Textbox
+        self.tts_voice_tb: gr.Textbox
+        self.tts_status_md: gr.Markdown
+        self.tts_save_btn: gr.Button
+
+        self.api_key_tb: gr.Textbox
+        self.key_status_md: gr.Markdown
+        self.key_save_btn: gr.Button
+
     def _list_personalities(self) -> list[str]:
         names: list[str] = []
         try:
@@ -62,9 +69,6 @@ class PersonalityUI:
             pass
         return names
 
-    def _resolve_profile_dir(self, selection: str) -> Path:
-        return self._profiles_root / selection
-
     def _read_instructions_for(self, name: str) -> str:
         try:
             if name == self.DEFAULT_OPTION:
@@ -72,77 +76,19 @@ class PersonalityUI:
                 if default_file.exists():
                     return default_file.read_text(encoding="utf-8").strip()
                 return ""
-            target = self._resolve_profile_dir(name) / "instructions.txt"
+            target = self._profiles_root / name / "instructions.txt"
             if target.exists():
                 return target.read_text(encoding="utf-8").strip()
             return ""
         except Exception as e:
             return f"Could not load instructions: {e}"
 
-    def _read_tools_for(self, name: str) -> str:
-        try:
-            profile_name = "default" if name == self.DEFAULT_OPTION else name
-            target = self._resolve_profile_dir(profile_name) / "tools.txt"
-            if target.exists():
-                return target.read_text(encoding="utf-8")
-        except Exception:
-            pass
-        return ""
-
-    def _available_tools_for(self, selected: str) -> tuple[list[str], list[str]]:
-        shared: list[str] = []
-        try:
-            for py in self._tools_dir.glob("*.py"):
-                if py.stem in {"__init__", "core_tools"}:
-                    continue
-                shared.append(py.stem)
-        except Exception:
-            pass
-        local: list[str] = []
-        try:
-            if selected != self.DEFAULT_OPTION:
-                for py in (self._profiles_root / selected).glob("*.py"):
-                    local.append(py.stem)
-        except Exception:
-            pass
-        return sorted(shared), sorted(local)
-
-    @staticmethod
-    def _parse_enabled_tools(text: str) -> list[str]:
-        enabled: list[str] = []
-        for line in text.splitlines():
-            s = line.strip()
-            if not s or s.startswith("#"):
-                continue
-            enabled.append(s)
-        return enabled
-
-    @staticmethod
-    def _sanitize_name(name: str) -> str:
-        import re
-
-        s = name.strip()
-        s = re.sub(r"\s+", "_", s)
-        s = re.sub(r"[^a-zA-Z0-9_-]", "", s)
-        return s
-
-    # ---------- Public API ----------
     def create_components(self) -> None:
-        """Instantiate Gradio components for the personality UI."""
-        if LOCKED_PROFILE is not None:
-            is_locked = True
-            current_value: str = LOCKED_PROFILE
-            dropdown_label = "Select personality (locked)"
-            dropdown_choices: list[str] = [LOCKED_PROFILE]
-        else:
-            is_locked = False
-            current_value = config.REACHY_MINI_CUSTOM_PROFILE or self.DEFAULT_OPTION
-            dropdown_label = "Select personality"
-            dropdown_choices = [self.DEFAULT_OPTION, *(self._list_personalities())]
-        initial_tools_txt = self._read_tools_for(current_value)
-        shared_tools, local_tools = self._available_tools_for(current_value)
-        initial_available_tools = sorted(set(shared_tools + local_tools))
-        initial_enabled_tools = self._parse_enabled_tools(initial_tools_txt)
+        """Instantiate simplified Gradio components."""
+        is_locked = LOCKED_PROFILE is not None
+        current_value = LOCKED_PROFILE if is_locked else (config.REACHY_MINI_CUSTOM_PROFILE or self.DEFAULT_OPTION)
+        dropdown_label = "个性 (已锁定)" if is_locked else "切换个性"
+        dropdown_choices = [LOCKED_PROFILE] if is_locked else [self.DEFAULT_OPTION, *(self._list_personalities())]
 
         self.personalities_dropdown = gr.Dropdown(
             label=dropdown_label,
@@ -150,52 +96,26 @@ class PersonalityUI:
             value=current_value,
             interactive=not is_locked,
         )
-        self.apply_btn = gr.Button("Apply personality", interactive=not is_locked)
+        self.apply_btn = gr.Button("应用", interactive=not is_locked)
         self.status_md = gr.Markdown(visible=True)
         self.preview_md = gr.Markdown(value=self._read_instructions_for(current_value))
-        self.person_name_tb = gr.Textbox(label="Personality name", interactive=not is_locked)
-        self.person_instr_ta = gr.TextArea(label="Personality instructions", lines=10, interactive=not is_locked)
-        self.tools_txt_ta = gr.TextArea(
-            label="tools.txt",
-            value=initial_tools_txt,
-            lines=10,
-            interactive=not is_locked,
-        )
         self.voice_dropdown = gr.Dropdown(
-            label="Voice",
+            label="语音",
             choices=get_available_voices_for_backend(),
             value=get_default_voice_for_backend(),
             interactive=not is_locked,
         )
-        self.new_personality_btn = gr.Button("New personality", interactive=not is_locked)
-        self.available_tools_cg = gr.CheckboxGroup(
-            label="Available tools (helper)",
-            choices=initial_available_tools,
-            value=initial_enabled_tools,
-            interactive=not is_locked,
-        )
-        self.save_btn = gr.Button("Save personality (instructions + tools)", interactive=not is_locked)
 
     def additional_inputs_ordered(self) -> list[Any]:
-        """Return the additional inputs in the expected order for Stream."""
         return [
             self.personalities_dropdown,
             self.apply_btn,
-            self.new_personality_btn,
             self.status_md,
             self.preview_md,
-            self.person_name_tb,
-            self.person_instr_ta,
-            self.tools_txt_ta,
             self.voice_dropdown,
-            self.available_tools_cg,
-            self.save_btn,
         ]
 
-    # ---------- Event wiring ----------
     def wire_events(self, handler: Any, blocks: gr.Blocks) -> None:
-        """Attach event handlers to components within a Blocks context."""
-
         async def _apply_personality(selected: str) -> tuple[str, str]:
             if LOCKED_PROFILE is not None and selected != LOCKED_PROFILE:
                 return (
@@ -212,7 +132,7 @@ class PersonalityUI:
             try:
                 if name == self.DEFAULT_OPTION:
                     return default_voice
-                vf = self._resolve_profile_dir(name) / "voice.txt"
+                vf = self._profiles_root / name / "voice.txt"
                 if vf.exists():
                     v = vf.read_text(encoding="utf-8").strip()
                     return v or default_voice
@@ -233,78 +153,8 @@ class PersonalityUI:
                     value=get_default_voice_for_backend(),
                 )
 
-        def _load_profile_for_edit(selected: str) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], str]:
-            instr = self._read_instructions_for(selected)
-            tools_txt = self._read_tools_for(selected)
-            shared, local = self._available_tools_for(selected)
-            all_tools = sorted(set(shared + local))
-            enabled = self._parse_enabled_tools(tools_txt)
-            status_text = f"Loaded profile '{selected}'."
-            return (
-                gr.update(value=instr),
-                gr.update(value=tools_txt),
-                gr.update(choices=all_tools, value=enabled),
-                status_text,
-            )
-
-        def _new_personality() -> tuple[
-            dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], str, dict[str, Any]
-        ]:
-            try:
-                # Prefill with hints
-                instr_val = """# Write your instructions here\n# e.g., Keep responses concise and friendly."""
-                tools_txt_val = "# tools enabled for this profile\n"
-                return (
-                    gr.update(value=""),
-                    gr.update(value=instr_val),
-                    gr.update(value=tools_txt_val),
-                    gr.update(choices=sorted(self._available_tools_for(self.DEFAULT_OPTION)[0]), value=[]),
-                    "Fill in a name, instructions and (optional) tools, then Save.",
-                    gr.update(value=get_default_voice_for_backend()),
-                )
-            except Exception:
-                return (
-                    gr.update(),
-                    gr.update(),
-                    gr.update(),
-                    gr.update(),
-                    "Failed to initialize new personality.",
-                    gr.update(),
-                )
-
-        def _save_personality(
-            name: str, instructions: str, tools_text: str, voice: str
-        ) -> tuple[dict[str, Any], dict[str, Any], str]:
-            name_s = self._sanitize_name(name)
-            if not name_s:
-                return gr.update(), gr.update(), "Please enter a valid name."
-            try:
-                target_dir = self._profiles_root / "user_personalities" / name_s
-                target_dir.mkdir(parents=True, exist_ok=True)
-                (target_dir / "instructions.txt").write_text(instructions.strip() + "\n", encoding="utf-8")
-                (target_dir / "tools.txt").write_text(tools_text.strip() + "\n", encoding="utf-8")
-                (target_dir / "voice.txt").write_text(
-                    (voice or get_default_voice_for_backend()).strip() + "\n",
-                    encoding="utf-8",
-                )
-
-                choices = self._list_personalities()
-                value = f"user_personalities/{name_s}"
-                if value not in choices:
-                    choices.append(value)
-                return (
-                    gr.update(choices=[self.DEFAULT_OPTION, *sorted(choices)], value=value),
-                    gr.update(value=instructions),
-                    f"Saved personality '{name_s}'.",
-                )
-            except Exception as e:
-                return gr.update(), gr.update(), f"Failed to save personality: {e}"
-
-        def _sync_tools_from_checks(selected: list[str], current_text: str) -> dict[str, Any]:
-            comments = [ln for ln in current_text.splitlines() if ln.strip().startswith("#")]
-            body = "\n".join(selected)
-            out = ("\n".join(comments) + ("\n" if comments else "") + body).strip() + "\n"
-            return gr.update(value=out)
+        def _load_profile_preview(selected: str) -> str:
+            return self._read_instructions_for(selected)
 
         with blocks:
             self.apply_btn.click(
@@ -312,44 +162,131 @@ class PersonalityUI:
                 inputs=[self.personalities_dropdown],
                 outputs=[self.status_md, self.preview_md],
             )
-
             self.personalities_dropdown.change(
-                fn=_load_profile_for_edit,
+                fn=_load_profile_preview,
                 inputs=[self.personalities_dropdown],
-                outputs=[self.person_instr_ta, self.tools_txt_ta, self.available_tools_cg, self.status_md],
+                outputs=[self.preview_md],
             )
-
             blocks.load(
                 fn=_fetch_voices,
                 inputs=[self.personalities_dropdown],
                 outputs=[self.voice_dropdown],
             )
 
-            self.available_tools_cg.change(
-                fn=_sync_tools_from_checks,
-                inputs=[self.available_tools_cg, self.tools_txt_ta],
-                outputs=[self.tools_txt_ta],
-            )
+    def create_config_accordions(self, stream_manager: gr.Blocks, instance_path: str | None = None) -> None:
+        """Create ASR/LLM/TTS/API Key configuration accordions."""
+        from xiaoze_conversation_app.config import refresh_runtime_config_from_env
 
-            self.new_personality_btn.click(
-                fn=_new_personality,
-                inputs=[],
-                outputs=[
-                    self.person_name_tb,
-                    self.person_instr_ta,
-                    self.tools_txt_ta,
-                    self.available_tools_cg,
-                    self.status_md,
-                    self.voice_dropdown,
-                ],
-            )
+        def _read_env_lines(env_path: Path) -> list[str]:
+            try:
+                return env_path.read_text(encoding="utf-8").splitlines()
+            except FileNotFoundError:
+                return []
 
-            self.save_btn.click(
-                fn=_save_personality,
-                inputs=[self.person_name_tb, self.person_instr_ta, self.tools_txt_ta, self.voice_dropdown],
-                outputs=[self.personalities_dropdown, self.person_instr_ta, self.status_md],
-            ).then(
-                fn=_apply_personality,
-                inputs=[self.personalities_dropdown],
-                outputs=[self.status_md, self.preview_md],
+        def _persist_env_values(updates: dict[str, str]) -> None:
+            normalized_updates = {name: (value or "").strip() for name, value in updates.items()}
+            normalized_updates = {name: value for name, value in normalized_updates.items() if value}
+            if not normalized_updates:
+                return
+
+            for env_name, value in normalized_updates.items():
+                import os
+                os.environ[env_name] = value
+            refresh_runtime_config_from_env()
+
+            if not instance_path:
+                return
+
+            inst = Path(instance_path)
+            inst.mkdir(parents=True, exist_ok=True)
+            env_path = inst / ".env"
+            lines = _read_env_lines(env_path)
+            for env_name, value in normalized_updates.items():
+                replaced = False
+                for index, line in enumerate(lines):
+                    if line.strip().startswith(f"{env_name}="):
+                        lines[index] = f"{env_name}={value}"
+                        replaced = True
+                        break
+                if not replaced:
+                    lines.append(f"{env_name}={value}")
+            env_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+
+        current_api_key = (config.OPENAI_COMPATIBLE_API_KEY or config.OPENAI_API_KEY or "")
+
+        with stream_manager:
+            with gr.Accordion("API Key", open=False):
+                self.api_key_tb = gr.Textbox(label="API Key", type="password", value=current_api_key)
+                self.key_status_md = gr.Markdown()
+                self.key_save_btn = gr.Button("保存 API Key")
+
+            with gr.Accordion("ASR 配置 (语音识别)", open=False):
+                self.asr_url_tb = gr.Textbox(label="ASR Base URL", value=config.ASR_BASE_URL or "")
+                self.asr_model_tb = gr.Textbox(label="ASR Model", value=config.ASR_MODEL)
+                self.asr_lang_tb = gr.Textbox(label="ASR Language (可选, 如 zh)", value=config.ASR_LANGUAGE or "")
+                self.asr_status_md = gr.Markdown()
+                self.asr_save_btn = gr.Button("保存 ASR 配置")
+
+            with gr.Accordion("LLM 配置 (对话)", open=False):
+                self.llm_url_tb = gr.Textbox(label="LLM Base URL", value=config.LLM_BASE_URL or "")
+                self.llm_model_tb = gr.Textbox(label="LLM Model", value=config.LLM_MODEL)
+                self.llm_status_md = gr.Markdown()
+                self.llm_save_btn = gr.Button("保存 LLM 配置")
+
+            with gr.Accordion("TTS 配置 (语音合成)", open=False):
+                self.tts_url_tb = gr.Textbox(label="TTS Base URL", value=config.TTS_BASE_URL or "")
+                self.tts_model_tb = gr.Textbox(label="TTS Model", value=config.TTS_MODEL)
+                self.tts_voice_tb = gr.Textbox(label="TTS Voice", value=config.TTS_VOICE or "alloy")
+                self.tts_status_md = gr.Markdown()
+                self.tts_save_btn = gr.Button("保存 TTS 配置")
+
+            def _save_asr(url: str, model: str, lang: str) -> str:
+                _persist_env_values({
+                    "ASR_BASE_URL": url,
+                    "ASR_MODEL": model,
+                    "ASR_LANGUAGE": lang,
+                })
+                return "ASR 配置已保存。语音连接建议重新进入后生效。"
+
+            def _save_llm(url: str, model: str) -> str:
+                _persist_env_values({
+                    "LLM_BASE_URL": url,
+                    "LLM_MODEL": model,
+                })
+                return "LLM 配置已保存。语音连接建议重新进入后生效。"
+
+            def _save_tts(url: str, model: str, voice: str) -> str:
+                _persist_env_values({
+                    "TTS_BASE_URL": url,
+                    "TTS_MODEL": model,
+                    "TTS_VOICE": voice,
+                })
+                return "TTS 配置已保存。语音连接建议重新进入后生效。"
+
+            def _save_key(key: str) -> str:
+                key = (key or "").strip()
+                if not key:
+                    return "API Key 不能为空。"
+                _persist_env_values({"OPENAI_COMPATIBLE_API_KEY": key})
+                return "API Key 已保存。语音连接建议重新进入后生效。"
+
+            self.asr_save_btn.click(
+                fn=_save_asr,
+                inputs=[self.asr_url_tb, self.asr_model_tb, self.asr_lang_tb],
+                outputs=[self.asr_status_md],
+            )
+            self.llm_save_btn.click(
+                fn=_save_llm,
+                inputs=[self.llm_url_tb, self.llm_model_tb],
+                outputs=[self.llm_status_md],
+            )
+            self.tts_save_btn.click(
+                fn=_save_tts,
+                inputs=[self.tts_url_tb, self.tts_model_tb, self.tts_voice_tb],
+                outputs=[self.tts_status_md],
+            )
+            self.key_save_btn.click(
+                fn=_save_key,
+                inputs=[self.api_key_tb],
+                outputs=[self.key_status_md],
             )
