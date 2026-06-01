@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Any
 
@@ -31,6 +32,8 @@ from reachy_mini_conversation_app.tools.core_tools import get_active_tool_specs
 
 
 logger = logging.getLogger(__name__)
+HF_SESSION_ALLOCATOR_TIMEOUT_S = 30.0
+HF_SESSION_ALLOCATOR_ATTEMPTS = 3
 
 
 def _build_openai_compatible_client_from_realtime_url(
@@ -93,7 +96,15 @@ class HuggingFaceRealtimeHandler(BaseRealtimeHandler):
                     # The OpenAI SDK type only includes 24 kHz PCM, but the HF
                     # compatible server uses rate=None for native 16 kHz mode.
                     format=_native_rate_audio_pcm(),  # type: ignore[typeddict-item]
-                    transcription=AudioTranscriptionParam(model="gpt-4o-transcribe", language="en"),
+                    transcription=AudioTranscriptionParam(
+                        model=config.OPENAI_COMPATIBLE_TRANSCRIPTION_MODEL or "gpt-4o-mini-transcribe",
+                        language=config.OPENAI_COMPATIBLE_ASR_LANGUAGE or "zh",
+                        prompt=(
+                            "这段音频主要是普通话中文，可能包含小泽机器人、Reachy Mini、访客登记、会议查询、"
+                            "跳舞、动作控制等词。请优先按中文转写，不要把中文语音误写成 Yeah、Okay、"
+                            "Chow、Well 等英文短词。"
+                        ),
+                    ),
                     turn_detection=ServerVad(type="server_vad", interrupt_response=True),
                 ),
                 output=RealtimeAudioConfigOutputParam(
@@ -138,10 +149,31 @@ class HuggingFaceRealtimeHandler(BaseRealtimeHandler):
             logger.info("HF_REALTIME_CONNECTION_MODE=deployed; ignoring HF_REALTIME_WS_URL.")
 
         allocator_headers = {"Authorization": f"Bearer {bearer_token}"} if bearer_token else None
-        async with httpx.AsyncClient(timeout=10.0) as http_client:
-            response = await http_client.post(session_url, headers=allocator_headers)
-            response.raise_for_status()
-            payload = response.json()
+        last_error: Exception | None = None
+        async with httpx.AsyncClient(timeout=HF_SESSION_ALLOCATOR_TIMEOUT_S) as http_client:
+            for attempt in range(1, HF_SESSION_ALLOCATOR_ATTEMPTS + 1):
+                try:
+                    response = await http_client.post(session_url, headers=allocator_headers)
+                    response.raise_for_status()
+                    payload = response.json()
+                    break
+                except (httpx.TimeoutException, httpx.NetworkError) as e:
+                    last_error = e
+                    logger.warning(
+                        "Hugging Face realtime session allocation failed on attempt %s/%s: %s",
+                        attempt,
+                        HF_SESSION_ALLOCATOR_ATTEMPTS,
+                        type(e).__name__,
+                    )
+                    if attempt < HF_SESSION_ALLOCATOR_ATTEMPTS:
+                        await asyncio.sleep(float(attempt))
+                except Exception:
+                    raise
+            else:
+                raise RuntimeError(
+                    "Hugging Face ASR/TTS session service timed out. "
+                    "Check the network connection to pollen-robotics-reachy-mini-realtime-url.hf.space and retry."
+                ) from last_error
 
         connect_url = payload.get("connect_url")
         if not isinstance(connect_url, str) or not connect_url:

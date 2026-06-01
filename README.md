@@ -1,11 +1,11 @@
 ---
-title: Reachy Mini Conversation App
+title: Xiaoze Conversation App
 emoji: 🎤
 colorFrom: red
 colorTo: blue
 sdk: static
 pinned: false
-short_description: Talk with Reachy Mini!
+short_description: Xiaoze conversation app for Reachy Mini.
 suggested_storage: large
 tags:
  - reachy_mini
@@ -373,10 +373,9 @@ Each profile should include `instructions.txt` (prompt text). `tools.txt` (list 
 
 Write plain-text prompts in `instructions.txt`. To reuse shared prompt pieces, add lines like:
 ```
-[passion_for_lobster_jokes]
-[identities/witty_identity]
+[default_prompt]
 ```
-Each placeholder pulls the matching file under `src/reachy_mini_conversation_app/prompts/` (nested paths allowed). See `profiles/example/` for a reference layout.
+Each placeholder pulls the matching file under `src/reachy_mini_conversation_app/prompts/` (nested paths allowed). Built-in profiles are now enterprise scenarios such as front desk, meeting room, office desk, visitor registration, and administration.
 
 **Enabling tools:**
 
@@ -393,7 +392,7 @@ Tools are resolved first from Python files in the profile folder (custom tools),
 **Custom tools:**
 
 On top of built-in tools found in the core library, you can implement custom tools specific to your profile by adding Python files in the profile folder.
-Custom tools must subclass `reachy_mini_conversation_app.tools.core_tools.Tool` (see `profiles/example/sweep_look.py`).
+Custom tools must subclass `reachy_mini_conversation_app.tools.core_tools.Tool`.
 
 **Edit personalities from the UI:**
 
@@ -411,7 +410,7 @@ Note: The "Personality" panel updates the conversation instructions. Tool sets a
 
 To create a locked variant of the app that cannot switch profiles, edit `src/reachy_mini_conversation_app/config.py` and set the `LOCKED_PROFILE` constant to the desired profile name:
 ```python
-LOCKED_PROFILE: str | None = "mars_rover"  # Lock to this profile
+LOCKED_PROFILE: str | None = "前台接待"  # Lock to this profile
 ```
 When `LOCKED_PROFILE` is set, the app always uses that profile, ignoring saved startup settings, `REACHY_MINI_CUSTOM_PROFILE`, and the Gradio UI. The UI shows "(locked)" and disables all profile editing controls.
 This is useful for creating dedicated clones of the app with a fixed personality. Clone scripts can simply edit this constant to lock the variant.

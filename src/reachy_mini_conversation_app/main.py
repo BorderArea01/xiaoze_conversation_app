@@ -10,9 +10,10 @@ from typing import Any, Dict, List, Optional
 from pathlib import Path
 
 import gradio as gr
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastrtc import Stream
 from gradio.utils import get_space
+from fastapi.responses import JSONResponse
 
 from reachy_mini import ReachyMini, ReachyMiniApp
 from reachy_mini_conversation_app.utils import (
@@ -21,8 +22,49 @@ from reachy_mini_conversation_app.utils import (
     setup_logger,
     initialize_camera_and_vision,
     log_connection_troubleshooting,
+    ensure_localhost_bypasses_proxy,
+)
+from reachy_mini_conversation_app.platform_chat import send_platform_chat, mount_platform_chat_routes
+from reachy_mini_conversation_app.text_action_bridge import (
+    parse_text_actions,
+    execute_text_actions,
+    is_action_only_query,
+    format_action_results,
 )
 
+
+GRADIO_LOCALIZATION_JS = """
+() => {
+  const translations = new Map([
+    ["Chatbot", "对话记录"],
+    ["Stream", "语音连接"],
+    ["Click to Access Microphone", "点击开启麦克风"],
+    ["Toggle Sidebar", "展开/收起侧边栏"],
+    ["grant webcam access", "授权麦克风访问"],
+  ]);
+  const translateNode = (root) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const node of nodes) {
+      const value = node.nodeValue.trim();
+      if (translations.has(value)) node.nodeValue = node.nodeValue.replace(value, translations.get(value));
+    }
+    for (const el of root.querySelectorAll?.("[aria-label], [title]") || []) {
+      for (const attr of ["aria-label", "title"]) {
+        const value = el.getAttribute(attr);
+        if (translations.has(value)) el.setAttribute(attr, translations.get(value));
+      }
+    }
+  };
+  const run = () => {
+    translateNode(document.body);
+  };
+  new MutationObserver(run).observe(document.documentElement, { childList: true, subtree: true });
+  document.addEventListener("DOMContentLoaded", run);
+  run();
+}
+"""
 
 def update_chatbot(chatbot: List[Dict[str, Any]], response: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Update the chatbot with AdditionalOutputs."""
@@ -30,8 +72,17 @@ def update_chatbot(chatbot: List[Dict[str, Any]], response: Dict[str, Any]) -> L
     return chatbot
 
 
+async def typed_platform_chat(query: str) -> str:
+    """Send typed text to the platform websocket for manual probing."""
+    result = await send_platform_chat(query)
+    if not result.get("ok"):
+        raise gr.Error(str(result.get("error") or "platform_chat_failed"))
+    return str(result.get("text") or "(no text returned)")
+
+
 def main() -> None:
     """Entrypoint for the Reachy Mini conversation app."""
+    ensure_localhost_bypasses_proxy()
     args, _ = parse_args()
     run(args)
 
@@ -44,6 +95,7 @@ def run(
     instance_path: Optional[str] = None,
 ) -> None:
     """Run the Reachy Mini conversation app."""
+    ensure_localhost_bypasses_proxy()
     # Putting these dependencies here makes the dashboard faster to load when the conversation app is installed
     from reachy_mini_conversation_app.moves import MovementManager
     from reachy_mini_conversation_app.config import (
@@ -189,6 +241,7 @@ def run(
     current_file_path = os.path.dirname(os.path.abspath(__file__))
     logger.debug(f"Current file absolute path: {current_file_path}")
     chatbot = gr.Chatbot(
+        label="对话记录",
         type="messages",
         resizable=True,
         avatar_images=(
@@ -258,13 +311,13 @@ def run(
             startup_voice=startup_settings.voice,
         )  # type: ignore[assignment]
     elif config.BACKEND_PROVIDER == PLATFORM_AGENT_BACKEND:
-        from reachy_mini_conversation_app.platform_agent import PlatformAgentHandler
+        from reachy_mini_conversation_app.platform_agent import PlatformAgentRealtimeHandler
 
         logger.info(
-            "Using %s via platform terminal websocket",
+            "Using %s via platform terminal websocket with Hugging Face realtime ASR/TTS",
             get_backend_label(config.BACKEND_PROVIDER),
         )
-        handler = PlatformAgentHandler(
+        handler = PlatformAgentRealtimeHandler(
             deps,
             gradio_mode=args.gradio,
             instance_path=instance_path,
@@ -311,13 +364,181 @@ def run(
             additional_inputs=additional_inputs,
             additional_outputs=[chatbot],
             additional_outputs_handler=update_chatbot,
-            ui_args={"title": "Talk with Reachy Mini"},
+            ui_args={"title": "小泽机器人对话"},
         )
         stream_manager = stream.ui
+
+        async def typed_platform_chat_with_actions(query: str) -> str:
+            """Send typed text to the platform websocket and run local robot actions."""
+            actions = parse_text_actions(query)
+            action_results = await execute_text_actions(query, deps)
+            action_text = format_action_results(action_results)
+            if is_action_only_query(query, actions):
+                return action_text or "没有识别到可执行的本地动作。"
+            result = await send_platform_chat(query)
+            if not result.get("ok"):
+                raise gr.Error(str(result.get("error") or "platform_chat_failed"))
+            parts = [action_text, str(result.get("text") or "(平台没有返回文本)")]
+            return "\n\n".join(part for part in parts if part.strip())
+
+        def _read_env_lines(env_path: Path) -> list[str]:
+            try:
+                return env_path.read_text(encoding="utf-8").splitlines()
+            except FileNotFoundError:
+                return []
+
+        def _persist_env_values(updates: dict[str, str]) -> None:
+            normalized_updates = {name: (value or "").strip() for name, value in updates.items()}
+            normalized_updates = {name: value for name, value in normalized_updates.items() if value}
+            if not normalized_updates:
+                return
+
+            for env_name, value in normalized_updates.items():
+                os.environ[env_name] = value
+            refresh_runtime_config_from_env()
+
+            if not instance_path:
+                return
+
+            inst = Path(instance_path)
+            inst.mkdir(parents=True, exist_ok=True)
+            env_path = inst / ".env"
+            lines = _read_env_lines(env_path)
+            for env_name, value in normalized_updates.items():
+                replaced = False
+                for index, line in enumerate(lines):
+                    if line.strip().startswith(f"{env_name}="):
+                        lines[index] = f"{env_name}={value}"
+                        replaced = True
+                        break
+                if not replaced:
+                    lines.append(f"{env_name}={value}")
+            env_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+
+        def save_platform_config_gradio(device_id: str, user_id: str, session_id: str, terminal_ws_url: str) -> str:
+            """Persist the small set of platform values users edit from the Gradio app."""
+            device_id = (device_id or "").strip()
+            user_id = (user_id or "").strip()
+            session_id = (session_id or "").strip()
+            terminal_ws_url = (terminal_ws_url or "").strip()
+            if not device_id or not user_id or not session_id or not terminal_ws_url:
+                raise gr.Error("设备号、用户 ID、会话 ID 和平台 WS 都需要填写。")
+            _persist_env_values(
+                {
+                    "BACKEND_PROVIDER": PLATFORM_AGENT_BACKEND,
+                    "REACHY_PLATFORM_DEVICE_ID": device_id,
+                    "REACHY_PLATFORM_USER_ID": user_id,
+                    "REACHY_PLATFORM_SESSION_ID": session_id,
+                    "REACHY_PLATFORM_TERMINAL_WS_URL": terminal_ws_url,
+                }
+            )
+            return "已保存。文字对话会立即使用新配置；语音连接建议重新进入应用后再测试。"
+
+        current_platform_config = PlatformClientConfig.from_env()
+        with stream_manager:
+            with gr.Accordion("设备配置", open=False):
+                platform_device_id = gr.Textbox(label="设备号", value=current_platform_config.device_id)
+                platform_user_id = gr.Textbox(label="用户 ID", value=current_platform_config.user_id)
+                platform_session_id = gr.Textbox(label="会话 ID", value=current_platform_config.session_id)
+                platform_terminal_ws = gr.Textbox(label="平台 WS", value=current_platform_config.terminal_ws_url)
+                platform_save_status = gr.Markdown()
+                platform_save = gr.Button("保存设备配置")
+                platform_save.click(
+                    save_platform_config_gradio,
+                    inputs=[platform_device_id, platform_user_id, platform_session_id, platform_terminal_ws],
+                    outputs=platform_save_status,
+                    api_name="save_device_config",
+                )
+            with gr.Accordion("平台文字对话", open=False):
+                typed_query = gr.Textbox(
+                    label="输入文字",
+                    lines=3,
+                    placeholder="帮我查询今天的访客登记情况",
+                )
+                typed_answer = gr.Textbox(label="平台回复", lines=6)
+                typed_send = gr.Button("发送")
+                typed_send.click(
+                    typed_platform_chat_with_actions,
+                    inputs=typed_query,
+                    outputs=typed_answer,
+                    api_name="platform_chat",
+                )
+            stream_manager.load(fn=None, js=GRADIO_LOCALIZATION_JS)
         if not settings_app:
             app = FastAPI()
         else:
             app = settings_app
+
+        mount_platform_chat_routes(app)
+
+        def _gradio_status_payload() -> dict[str, Any]:
+            current_platform = PlatformClientConfig.from_env()
+            return {
+                "active_backend": config.BACKEND_PROVIDER,
+                "backend_provider": config.BACKEND_PROVIDER,
+                "has_key": True,
+                "has_platform_agent_key": True,
+                "has_platform_asr_tts_key": bool(config.OPENAI_COMPATIBLE_API_KEY),
+                "can_proceed": True,
+                "can_proceed_with_platform_agent": True,
+                "requires_restart": False,
+                "platform": {
+                    "token_configured": bool(current_platform.token),
+                    "enabled": current_platform.enabled,
+                    "activate_on_start": current_platform.activate_on_start,
+                    "http_base_url": current_platform.http_base_url,
+                    "telemetry_ws_url": current_platform.telemetry_ws_url,
+                    "terminal_ws_url": current_platform.terminal_ws_url,
+                    "device_id": current_platform.device_id,
+                    "device_name": current_platform.device_name,
+                    "device_type_name": current_platform.device_type_name,
+                    "user_id": current_platform.user_id,
+                    "session_id": current_platform.session_id,
+                    "activation_code": current_platform.activation_code,
+                },
+            }
+
+        @app.get("/status")
+        def _status() -> JSONResponse:
+            return JSONResponse(_gradio_status_payload())
+
+        @app.post("/backend_config")
+        async def _set_backend_config(request: Request) -> JSONResponse:
+            payload = await request.json()
+            backend = str(payload.get("backend") or PLATFORM_AGENT_BACKEND).strip().lower()
+            if backend != PLATFORM_AGENT_BACKEND:
+                return JSONResponse({"ok": False, "error": "unsupported_backend_in_gradio_mode"}, status_code=400)
+
+            updates = {
+                "BACKEND_PROVIDER": PLATFORM_AGENT_BACKEND,
+                "MODEL_NAME": "",
+                "REACHY_PLATFORM_TOKEN": payload.get("platform_token") or "",
+                "REACHY_PLATFORM_DEVICE_ID": payload.get("platform_device_id") or "",
+                "REACHY_PLATFORM_USER_ID": payload.get("platform_user_id") or "",
+                "REACHY_PLATFORM_SESSION_ID": payload.get("platform_session_id") or "",
+                "REACHY_PLATFORM_TERMINAL_WS_URL": payload.get("platform_terminal_ws_url") or "",
+                "REACHY_PLATFORM_TELEMETRY_WS_URL": payload.get("platform_telemetry_ws_url") or "",
+                "REACHY_PLATFORM_HTTP_BASE_URL": payload.get("platform_http_base_url") or "",
+                "REACHY_PLATFORM_DEVICE_NAME": payload.get("platform_device_name") or "",
+                "REACHY_PLATFORM_DEVICE_TYPE_NAME": payload.get("platform_device_type_name") or "",
+                "REACHY_PLATFORM_ACTIVATION_CODE": payload.get("platform_activation_code") or "",
+            }
+            api_key = str(payload.get("api_key") or "").strip()
+            if api_key:
+                updates["OPENAI_COMPATIBLE_API_KEY"] = api_key
+            if payload.get("platform_enabled") is not None:
+                updates["REACHY_PLATFORM_ENABLED"] = "1" if payload.get("platform_enabled") else "0"
+            if payload.get("platform_activate_on_start") is not None:
+                updates["REACHY_PLATFORM_ACTIVATE_ON_START"] = "1" if payload.get("platform_activate_on_start") else "0"
+
+            _persist_env_values(updates)
+            return JSONResponse(
+                {
+                    "ok": True,
+                    "message": "Device configuration saved.",
+                    **_gradio_status_payload(),
+                }
+            )
 
         personality_ui.wire_events(handler, stream_manager)
 
@@ -383,6 +604,7 @@ class ReachyMiniConversationApp(ReachyMiniApp):  # type: ignore[misc]
 
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event) -> None:
         """Run the Reachy Mini conversation app."""
+        ensure_localhost_bypasses_proxy()
         asyncio.set_event_loop(asyncio.new_event_loop())
 
         args, _ = parse_args()

@@ -23,6 +23,7 @@ from scipy.signal import resample
 
 from reachy_mini import ReachyMini
 from reachy_mini.media.media_manager import MediaBackend
+from reachy_mini_conversation_app.utils import ensure_localhost_bypasses_proxy
 from reachy_mini_conversation_app.config import (
     HF_BACKEND,
     GEMINI_BACKEND,
@@ -46,6 +47,7 @@ from reachy_mini_conversation_app.config import (
     get_hf_connection_selection,
     refresh_runtime_config_from_env,
 )
+from reachy_mini_conversation_app.platform_chat import mount_platform_chat_routes
 from reachy_mini_conversation_app.startup_settings import read_startup_settings, write_startup_settings
 from reachy_mini_conversation_app.audio.startup_config import apply_audio_startup_config
 from reachy_mini_conversation_app.conversation_handler import ConversationHandler
@@ -181,7 +183,7 @@ class LocalStream:
         if backend in {OPENAI_COMPATIBLE_BACKEND, OPENAI_COMPATIBLE_CHAT_BACKEND}:
             return self._has_key(config.OPENAI_COMPATIBLE_API_KEY)
         if backend == PLATFORM_AGENT_BACKEND:
-            return self._has_key(config.OPENAI_COMPATIBLE_API_KEY) and self._has_key(os.getenv("REACHY_PLATFORM_TOKEN"))
+            return True
         return self._has_key(config.OPENAI_API_KEY)
 
     @staticmethod
@@ -194,7 +196,7 @@ class LocalStream:
         if backend in {OPENAI_COMPATIBLE_BACKEND, OPENAI_COMPATIBLE_CHAT_BACKEND}:
             return "OPENAI_COMPATIBLE_API_KEY"
         if backend == PLATFORM_AGENT_BACKEND:
-            return "OPENAI_COMPATIBLE_API_KEY and REACHY_PLATFORM_TOKEN"
+            return "REACHY_PLATFORM_TERMINAL_WS_URL"
         return "OPENAI_API_KEY"
 
     def _persist_env_value(self, env_name: str, value: str) -> None:
@@ -392,12 +394,15 @@ class LocalStream:
             platform_enabled: Optional[bool] = None
             platform_activate_on_start: Optional[bool] = None
 
+        mount_platform_chat_routes(self._settings_app)
+
         def _status_payload() -> dict[str, object]:
             backend_provider = get_backend_choice()
             active_backend = self._active_backend()
             has_openai_key = self._has_required_key(OPENAI_BACKEND)
             has_openai_compatible_key = self._has_required_key(OPENAI_COMPATIBLE_BACKEND)
             has_platform_agent_key = self._has_required_key(PLATFORM_AGENT_BACKEND)
+            has_platform_asr_tts_key = self._has_key(config.OPENAI_COMPATIBLE_API_KEY)
             has_gemini_key = self._has_required_key(GEMINI_BACKEND)
             hf_session_url = get_hf_session_url()
             hf_ws_url = get_hf_direct_ws_url()
@@ -421,6 +426,7 @@ class LocalStream:
                 "has_openai_key": has_openai_key,
                 "has_openai_compatible_key": has_openai_compatible_key,
                 "has_platform_agent_key": has_platform_agent_key,
+                "has_platform_asr_tts_key": has_platform_asr_tts_key,
                 "has_gemini_key": has_gemini_key,
                 "has_hf_session_url": has_hf_session_url,
                 "has_hf_ws_url": has_hf_ws_url,
@@ -510,14 +516,6 @@ class LocalStream:
                 return JSONResponse({"ok": False, "error": "empty_key"}, status_code=400)
             if backend in {OPENAI_COMPATIBLE_BACKEND, OPENAI_COMPATIBLE_CHAT_BACKEND} and not api_key and not self._has_required_key(backend):
                 return JSONResponse({"ok": False, "error": "empty_key"}, status_code=400)
-            if backend == PLATFORM_AGENT_BACKEND:
-                has_asr_tts_key = bool(api_key) or self._has_key(config.OPENAI_COMPATIBLE_API_KEY)
-                has_platform_token = bool(platform_token) or self._has_key(os.getenv("REACHY_PLATFORM_TOKEN"))
-                if not has_asr_tts_key:
-                    return JSONResponse({"ok": False, "error": "empty_key"}, status_code=400)
-                if not has_platform_token:
-                    return JSONResponse({"ok": False, "error": "empty_platform_token"}, status_code=400)
-
             if backend == OPENAI_BACKEND and api_key:
                 self._persist_api_key(api_key)
             if backend in {OPENAI_COMPATIBLE_BACKEND, OPENAI_COMPATIBLE_CHAT_BACKEND, PLATFORM_AGENT_BACKEND} and api_key:
@@ -615,6 +613,7 @@ class LocalStream:
         settings UI via the Reachy Mini settings server to collect it before
         starting streams.
         """
+        ensure_localhost_bypasses_proxy()
         self._stop_event.clear()
 
         # Try to load an existing instance .env first (covers subsequent runs)
