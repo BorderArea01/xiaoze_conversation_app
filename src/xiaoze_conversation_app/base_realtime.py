@@ -1036,3 +1036,23 @@ class BaseRealtimeHandler(ConversationHandler, ABC):
                 tool_choice="required",
             ),
         )
+
+    async def handle_text_turn(self, text: str) -> str:
+        """Submit typed text into the active realtime session."""
+        clean_text = text.strip()
+        if not clean_text:
+            return ""
+        if not self.connection:
+            raise RuntimeError("Realtime connection is not ready.")
+        await self.output_queue.put(AdditionalOutputs({"role": "user", "content": clean_text}))
+        await self.connection.conversation.item.create(
+            item={
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": clean_text}],
+            },
+        )
+        await self._safe_response_create(
+            response=RealtimeResponseCreateParamsParam(instructions="Answer concisely in speech.")
+        )
+        return "已发送到实时语音模型。"

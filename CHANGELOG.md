@@ -13,6 +13,7 @@
 - Reworked the settings UI around two clearer modes: recommended Aliyun realtime voice and advanced split ASR / LLM / TTS.
 - Added realtime model persistence through `model_name` so backend switches write the intended model cleanly.
 - Improved robot conversation monitor state so stopped audio loops report `running=false` and expose the last loop error.
+- Added a Free HF realtime mode to the settings UI and enabled typed monitor turns for realtime backends.
 - Started the robot-side local audio loop in SPA mode so the Raspberry Pi microphone and speaker handle conversation instead of the browser microphone.
 - Added `/conversation/status`, `/conversation/messages`, and `/conversation/text` for monitoring robot-side audio levels, chat history, and typed turns.
 - Changed the main voice UI into a robot conversation monitor with robot microphone/speaker levels and local handler text input.
