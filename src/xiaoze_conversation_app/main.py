@@ -340,12 +340,26 @@ def run(
             import os
             current_platform = PlatformClientConfig.from_env()
             aliyun_key = os.getenv("ALIYUN_API_KEY") or os.getenv("DASHSCOPE_API_KEY") or ""
+            openai_key = os.getenv("OPENAI_API_KEY") or ""
+            openai_compatible_key = os.getenv("OPENAI_COMPATIBLE_API_KEY") or ""
+            component_providers = {
+                (os.getenv("ASR_PROVIDER") or "openai").strip().lower(),
+                (os.getenv("LLM_PROVIDER") or "openai").strip().lower(),
+                (os.getenv("TTS_PROVIDER") or "openai").strip().lower(),
+            }
+            can_proceed = True
+            if "aliyun" in component_providers and not aliyun_key.strip():
+                can_proceed = False
+            if "openai_compatible" in component_providers and not openai_compatible_key.strip():
+                can_proceed = False
+            if "openai" in component_providers and not openai_key.strip():
+                can_proceed = False
             return JSONResponse({
                 "active_backend": config.BACKEND_PROVIDER,
                 "backend_provider": config.BACKEND_PROVIDER,
-                "has_key": True,
+                "has_key": can_proceed,
                 "has_aliyun_key": bool(aliyun_key.strip()),
-                "can_proceed": True,
+                "can_proceed": can_proceed,
                 "current_voice": get_default_voice_for_backend(),
                 "available_voices": get_available_voices_for_backend(),
                 "composed": {

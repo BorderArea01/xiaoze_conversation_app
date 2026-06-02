@@ -180,6 +180,19 @@ class LocalStream:
 
     def _has_required_key(self, backend: str) -> bool:
         """Return whether the requested backend has its required credential."""
+        if backend == COMPOSED_BACKEND:
+            component_providers = {
+                (config.ASR_PROVIDER or "").strip().lower(),
+                (config.LLM_PROVIDER or "").strip().lower(),
+                (config.TTS_PROVIDER or "").strip().lower(),
+            }
+            if "aliyun" in component_providers and not self._has_key(config.ALIYUN_API_KEY):
+                return False
+            if "openai_compatible" in component_providers and not self._has_key(config.OPENAI_COMPATIBLE_API_KEY):
+                return False
+            if "openai" in component_providers and not self._has_key(config.OPENAI_API_KEY):
+                return False
+            return True
         if backend == GEMINI_BACKEND:
             return self._has_key(config.GEMINI_API_KEY)
         if backend == HF_BACKEND:
@@ -635,6 +648,18 @@ class LocalStream:
                     composed_updates["TTS_VOICE"] = requested_voice
                 elif next_tts_provider == "aliyun" and config.TTS_VOICE not in ALIYUN_AVAILABLE_VOICES:
                     composed_updates["TTS_VOICE"] = get_default_voice_for_backend("aliyun")
+
+                next_component_providers = {
+                    composed_updates.get("ASR_PROVIDER", config.ASR_PROVIDER),
+                    composed_updates.get("LLM_PROVIDER", config.LLM_PROVIDER),
+                    composed_updates.get("TTS_PROVIDER", config.TTS_PROVIDER),
+                }
+                if (
+                    "aliyun" in next_component_providers
+                    and not (payload.aliyun_api_key or "").strip()
+                    and not self._has_key(config.ALIYUN_API_KEY)
+                ):
+                    return JSONResponse({"ok": False, "error": "empty_aliyun_key"}, status_code=400)
                 self._persist_env_values(composed_updates)
 
                 # Persist Aliyun API key if provided
