@@ -64,6 +64,17 @@ def _aliyun_tool_schema(tool: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _supports_function_calling(model_name: str) -> bool:
+    candidate = model_name.strip().lower()
+    if not candidate:
+        return True
+    if candidate.startswith("qwen3-omni-flash-realtime"):
+        return False
+    if candidate.startswith("qwen-omni-turbo-realtime"):
+        return False
+    return True
+
+
 class _AliyunSessionAPI:
     def __init__(self, connection: "_AliyunRealtimeConnection") -> None:
         self._connection = connection
@@ -77,13 +88,7 @@ class _AliyunResponseAPI:
         self._connection = connection
 
     async def create(self, **kwargs: Any) -> None:
-        payload = _to_plain_data(kwargs)
-        response = payload.get("response")
-        if isinstance(response, dict):
-            tools = response.get("tools")
-            if isinstance(tools, list):
-                response["tools"] = [_aliyun_tool_schema(tool) for tool in tools if isinstance(tool, dict)]
-        await self._connection.send({"type": "response.create", **payload})
+        await self._connection.send({"type": "response.create"})
 
 
 class _AliyunConversationItemAPI:
@@ -152,7 +157,15 @@ class _AliyunRealtimeConnection:
             session_payload["turn_detection"] = {
                 key: value
                 for key, value in turn_detection.items()
-                if key in {"type", "threshold", "silence_duration_ms", "prefix_padding_ms"}
+                if key
+                in {
+                    "type",
+                    "threshold",
+                    "silence_duration_ms",
+                    "prefix_padding_ms",
+                    "create_response",
+                    "interrupt_response",
+                }
             }
         tools = payload.get("tools")
         if isinstance(tools, list):
@@ -171,6 +184,8 @@ class _AliyunRealtimeConnection:
         event_type = normalized.get("type")
         if isinstance(event_type, str):
             normalized["type"] = _EVENT_TYPE_MAP.get(event_type, event_type)
+        if event_type == "conversation.item.input_audio_transcription.delta" and "delta" not in normalized:
+            normalized["delta"] = f"{normalized.get('text') or ''}{normalized.get('stash') or ''}"
         return _to_namespace(normalized)
 
     def __aiter__(self) -> "_AliyunRealtimeConnection":
@@ -256,6 +271,8 @@ class AliyunRealtimeHandler(BaseRealtimeHandler):
         return get_active_tool_specs(self.deps)
 
     def _build_session_tools(self, tool_specs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if not _supports_function_calling(config.MODEL_NAME or self.MODEL_NAME):
+            return []
         return [
             _aliyun_tool_schema(
                 {
@@ -269,6 +286,7 @@ class AliyunRealtimeHandler(BaseRealtimeHandler):
         ]
 
     def _get_session_config(self, tool_specs: list[dict[str, Any]]) -> dict[str, Any]:
+        tools = self._build_session_tools(tool_specs)
         return {
             "modalities": ["text", "audio"],
             "instructions": self._get_session_instructions(),
@@ -281,9 +299,10 @@ class AliyunRealtimeHandler(BaseRealtimeHandler):
                 "threshold": 0.5,
                 "silence_duration_ms": 500,
                 "prefix_padding_ms": 300,
+                "create_response": True,
+                "interrupt_response": True,
             },
-            "tools": self._build_session_tools(tool_specs),
-            "tool_choice": "auto",
+            **({"tools": tools, "tool_choice": "auto"} if tools else {}),
         }
 
     def _build_personality_update_session(self, instructions: str, voice: str) -> dict[str, Any]:
@@ -305,13 +324,6 @@ class AliyunRealtimeHandler(BaseRealtimeHandler):
             return ""
         if not self.connection:
             raise RuntimeError("Aliyun realtime connection is not ready.")
-        await self.output_queue.put(AdditionalOutputs({"role": "user", "content": clean_text}))
-        await self.connection.conversation.item.create(
-            item={
-                "type": "message",
-                "role": "user",
-                "content": [{"type": "input_text", "text": clean_text}],
-            },
-        )
-        await self._safe_response_create(response={"instructions": "请用简体中文简短回答，并用中文语音回复。"})
-        return "已发送到阿里云实时语音模型。"
+        message = "阿里云 Omni 实时模式请直接对机器人麦克风说话；文字输入不会注入实时语音会话。"
+        await self.output_queue.put(AdditionalOutputs({"role": "assistant", "content": message}))
+        return message

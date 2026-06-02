@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- Aligned the Aliyun Qwen-Omni realtime adapter with the DashScope WebSocket protocol:
+  - Send `response.create` without OpenAI-style response payloads.
+  - Preserve VAD `create_response` and `interrupt_response` flags.
+  - Normalize Aliyun partial ASR `text`/`stash` events into monitor-friendly transcript deltas.
+  - Omit tools for Qwen-Omni realtime models that do not support Function Calling.
+  - Make typed monitor input explain that Aliyun realtime uses the robot microphone as its input path.
 - Changed the default Reachy Mini prompt to use Simplified Chinese by default instead of English.
 - Appended Chinese-first language rules at the shared prompt loader so custom profiles also default to Chinese.
 - Forced realtime typed turns and tool-result replies to request concise Chinese speech responses.
