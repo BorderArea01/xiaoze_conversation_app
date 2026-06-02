@@ -47,7 +47,9 @@ from xiaoze_conversation_app.config import (
     parse_hf_direct_target,
     get_model_name_for_backend,
     get_hf_connection_selection,
+    get_default_voice_for_backend,
     refresh_runtime_config_from_env,
+    ALIYUN_AVAILABLE_VOICES,
 )
 from xiaoze_conversation_app.platform_chat import mount_platform_chat_routes
 from xiaoze_conversation_app.startup_settings import read_startup_settings, write_startup_settings
@@ -625,8 +627,14 @@ class LocalStream:
                     composed_updates["TTS_BASE_URL"] = payload.tts_base_url.strip()
                 if payload.tts_model:
                     composed_updates["TTS_MODEL"] = payload.tts_model.strip()
+                next_tts_provider = composed_updates.get("TTS_PROVIDER", config.TTS_PROVIDER)
                 if payload.tts_voice is not None:
-                    composed_updates["TTS_VOICE"] = payload.tts_voice.strip()
+                    requested_voice = payload.tts_voice.strip()
+                    if next_tts_provider == "aliyun" and requested_voice not in ALIYUN_AVAILABLE_VOICES:
+                        requested_voice = get_default_voice_for_backend("aliyun")
+                    composed_updates["TTS_VOICE"] = requested_voice
+                elif next_tts_provider == "aliyun" and config.TTS_VOICE not in ALIYUN_AVAILABLE_VOICES:
+                    composed_updates["TTS_VOICE"] = get_default_voice_for_backend("aliyun")
                 self._persist_env_values(composed_updates)
 
                 # Persist Aliyun API key if provided

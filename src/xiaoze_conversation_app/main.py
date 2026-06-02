@@ -359,7 +359,7 @@ def run(
                     "tts_provider": os.getenv("TTS_PROVIDER", "openai"),
                     "tts_base_url": os.getenv("TTS_BASE_URL", ""),
                     "tts_model": os.getenv("TTS_MODEL", "tts-1"),
-                    "tts_voice": os.getenv("TTS_VOICE", "alloy"),
+                    "tts_voice": config.TTS_VOICE or get_default_voice_for_backend(),
                 },
                 "platform": {
                     "device_id": current_platform.device_id,

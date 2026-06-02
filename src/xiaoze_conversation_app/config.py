@@ -95,6 +95,15 @@ ALIYUN_AVAILABLE_VOICES: list[str] = [
     "Mochi", "Dylan",
 ]
 
+
+def _normalize_tts_voice(provider: str | None, voice: str | None) -> str:
+    """Return a provider-compatible TTS voice."""
+    normalized_provider = (provider or "").strip().lower()
+    normalized_voice = (voice or "").strip()
+    if normalized_provider == "aliyun":
+        return normalized_voice if normalized_voice in ALIYUN_AVAILABLE_VOICES else "Ethan"
+    return normalized_voice
+
 OPENAI_BACKEND = "openai"
 OPENAI_COMPATIBLE_BACKEND = "openai_compatible"
 OPENAI_COMPATIBLE_CHAT_BACKEND = "openai_compatible_chat"
@@ -430,7 +439,7 @@ class Config:
     TTS_PROVIDER = (os.getenv("TTS_PROVIDER") or "openai").strip().lower()
     TTS_BASE_URL = (os.getenv("TTS_BASE_URL") or _fallback_url or "").strip()
     TTS_MODEL = (os.getenv("TTS_MODEL") or "tts-1").strip()
-    TTS_VOICE = (os.getenv("TTS_VOICE") or OPENAI_COMPATIBLE_VOICE or "").strip()
+    TTS_VOICE = _normalize_tts_voice(TTS_PROVIDER, os.getenv("TTS_VOICE") or OPENAI_COMPATIBLE_VOICE)
     TTS_SAMPLE_RATE = int(os.getenv("TTS_SAMPLE_RATE", os.getenv("OPENAI_COMPATIBLE_TTS_SAMPLE_RATE", "24000")))
     TTS_RESPONSE_FORMAT = (os.getenv("TTS_RESPONSE_FORMAT") or os.getenv("OPENAI_COMPATIBLE_TTS_RESPONSE_FORMAT", "pcm")).strip().lower()
     VAD_THRESHOLD = float(os.getenv("VAD_THRESHOLD", os.getenv("OPENAI_COMPATIBLE_VAD_THRESHOLD", "0.012")))
@@ -570,7 +579,10 @@ def refresh_runtime_config_from_env() -> None:
     config.TTS_PROVIDER = (os.getenv("TTS_PROVIDER") or "openai").strip().lower()
     config.TTS_BASE_URL = (os.getenv("TTS_BASE_URL") or _rt_fallback or "").strip()
     config.TTS_MODEL = (os.getenv("TTS_MODEL") or "tts-1").strip()
-    config.TTS_VOICE = (os.getenv("TTS_VOICE") or getattr(config, "OPENAI_COMPATIBLE_VOICE", "") or "").strip()
+    config.TTS_VOICE = _normalize_tts_voice(
+        config.TTS_PROVIDER,
+        os.getenv("TTS_VOICE") or getattr(config, "OPENAI_COMPATIBLE_VOICE", ""),
+    )
     config.TTS_SAMPLE_RATE = int(os.getenv("TTS_SAMPLE_RATE", os.getenv("OPENAI_COMPATIBLE_TTS_SAMPLE_RATE", "24000")))
     config.TTS_RESPONSE_FORMAT = (os.getenv("TTS_RESPONSE_FORMAT") or os.getenv("OPENAI_COMPATIBLE_TTS_RESPONSE_FORMAT", "pcm")).strip().lower()
     config.VAD_THRESHOLD = float(os.getenv("VAD_THRESHOLD", os.getenv("OPENAI_COMPATIBLE_VAD_THRESHOLD", "0.012")))

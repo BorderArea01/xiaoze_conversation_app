@@ -96,7 +96,7 @@ class GotoQueueMove(Move):  # type: ignore
         start_head_pose: NDArray[np.float32] | None = None,
         target_antennas: Tuple[float, float] = (0, 0),
         start_antennas: Tuple[float, float] | None = None,
-        target_body_yaw: float = 0,
+        target_body_yaw: float | None = None,
         start_body_yaw: float | None = None,
         duration: float = 1.0,
     ):
@@ -107,7 +107,7 @@ class GotoQueueMove(Move):  # type: ignore
         self.target_antennas = target_antennas
         self.start_antennas = start_antennas or (0, 0)
         self.target_body_yaw = target_body_yaw
-        self.start_body_yaw = start_body_yaw or 0
+        self.start_body_yaw = start_body_yaw
 
     @property
     def duration(self) -> float:
@@ -141,8 +141,12 @@ class GotoQueueMove(Move):  # type: ignore
                 dtype=np.float64,
             )
 
-            # Interpolate body yaw
-            body_yaw = self.start_body_yaw + (self.target_body_yaw - self.start_body_yaw) * t_clamped
+            # Body yaw is optional. Most head-only goto moves should not rotate the body.
+            if self.target_body_yaw is None:
+                body_yaw = None
+            else:
+                start_body_yaw = self.start_body_yaw if self.start_body_yaw is not None else self.target_body_yaw
+                body_yaw = start_body_yaw + (self.target_body_yaw - start_body_yaw) * t_clamped
 
             return (head_pose, antennas, body_yaw)
 

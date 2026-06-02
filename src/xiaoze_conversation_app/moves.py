@@ -58,7 +58,7 @@ logger = logging.getLogger(__name__)
 CONTROL_LOOP_FREQUENCY_HZ = 60.0  # Hz - Target frequency for the movement control loop
 
 # Type definitions
-FullBodyPose = Tuple[NDArray[np.float32], Tuple[float, float], float]  # (head_pose_4x4, antennas, body_yaw)
+FullBodyPose = Tuple[NDArray[np.float32], Tuple[float, float], float | None]  # (head_pose_4x4, antennas, body_yaw)
 
 
 class BreathingMove(Move):  # type: ignore
@@ -128,8 +128,9 @@ class BreathingMove(Move):  # type: ignore
             antenna_sway = self.antenna_sway_amplitude * np.sin(2 * np.pi * self.antenna_frequency * breathing_time)
             antennas = np.array([antenna_sway, -antenna_sway], dtype=np.float64)
 
-        # Return in official Move interface format: (head_pose, antennas_array, body_yaw)
-        return (head_pose, antennas, 0.0)
+        # Return in official Move interface format: (head_pose, antennas_array, body_yaw).
+        # Breathing should not rotate the body; leave yaw uncontrolled.
+        return (head_pose, antennas, None)
 
 
 def combine_full_body(primary_pose: FullBodyPose, secondary_pose: FullBodyPose) -> FullBodyPose:
@@ -151,12 +152,18 @@ def combine_full_body(primary_pose: FullBodyPose, secondary_pose: FullBodyPose) 
     # primary transform (T_abs).
     combined_head = compose_world_offset(primary_head, secondary_head, reorthonormalize=False)
 
-    # Sum antennas and body_yaw
+    # Sum antennas. Body yaw is opt-in: keep it uncontrolled unless a primary
+    # move explicitly provides a yaw, or a secondary source intentionally adds one.
     combined_antennas = (
         primary_antennas[0] + secondary_antennas[0],
         primary_antennas[1] + secondary_antennas[1],
     )
-    combined_body_yaw = primary_body_yaw + secondary_body_yaw
+    if primary_body_yaw is None:
+        combined_body_yaw = secondary_body_yaw
+    elif secondary_body_yaw is None:
+        combined_body_yaw = primary_body_yaw
+    else:
+        combined_body_yaw = primary_body_yaw + secondary_body_yaw
 
     return (combined_head, combined_antennas, combined_body_yaw)
 
@@ -164,7 +171,11 @@ def combine_full_body(primary_pose: FullBodyPose, secondary_pose: FullBodyPose) 
 def clone_full_body_pose(pose: FullBodyPose) -> FullBodyPose:
     """Create a deep copy of a full body pose tuple."""
     head, antennas, body_yaw = pose
-    return (head.copy(), (float(antennas[0]), float(antennas[1])), float(body_yaw))
+    return (
+        head.copy(),
+        (float(antennas[0]), float(antennas[1])),
+        None if body_yaw is None else float(body_yaw),
+    )
 
 
 @dataclass
@@ -543,15 +554,12 @@ class MovementManager:
                 head = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
             if antennas is None:
                 antennas = np.array([-0.1745, 0.1745])  # ~10° offset
-            if body_yaw is None:
-                body_yaw = 0.0
-
             antennas_tuple = (float(antennas[0]), float(antennas[1]))
             head_copy = head.copy()
             primary_full_body_pose = (
                 head_copy,
                 antennas_tuple,
-                float(body_yaw),
+                None if body_yaw is None else float(body_yaw),
             )
 
             self.state.last_primary_pose = clone_full_body_pose(primary_full_body_pose)
@@ -560,7 +568,7 @@ class MovementManager:
             primary_full_body_pose = clone_full_body_pose(self.state.last_primary_pose)
         else:
             neutral_head_pose = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
-            primary_full_body_pose = (neutral_head_pose, (0.0, 0.0), 0.0)
+            primary_full_body_pose = (neutral_head_pose, (0.0, 0.0), None)
             self.state.last_primary_pose = clone_full_body_pose(primary_full_body_pose)
 
         return primary_full_body_pose
@@ -592,7 +600,7 @@ class MovementManager:
             mm=False,
         )
         self._cached_secondary_offsets = current_offsets
-        self._cached_secondary_pose = (secondary_head_pose, (0.0, 0.0), 0.0)
+        self._cached_secondary_pose = (secondary_head_pose, (0.0, 0.0), None)
         return self._cached_secondary_pose
 
     def _compose_full_body_pose(self, current_time: float) -> FullBodyPose:
@@ -643,7 +651,7 @@ class MovementManager:
         return antennas_cmd
 
     def _issue_control_command(
-        self, head: NDArray[np.float32], antennas: Tuple[float, float], body_yaw: float
+        self, head: NDArray[np.float32], antennas: Tuple[float, float], body_yaw: float | None
     ) -> None:
         """Send the fused pose to the robot with throttled error logging."""
         try:
