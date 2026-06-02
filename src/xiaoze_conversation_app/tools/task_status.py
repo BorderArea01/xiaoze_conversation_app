@@ -1,4 +1,4 @@
-﻿"""Tool status tool - check status of background tools."""
+"""Tool status tool - check status of background tools."""
 
 import time
 import logging

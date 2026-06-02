@@ -1,1 +1,1 @@
-﻿"""Nothing (for ruff)."""
+"""Nothing (for ruff)."""

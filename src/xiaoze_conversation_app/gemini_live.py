@@ -1,4 +1,4 @@
-﻿"""Gemini Live API handler for real-time audio conversation.
+"""Gemini Live API handler for real-time audio conversation.
 
 Drop-in alternative to OpenaiRealtimeHandler. Uses the google-genai SDK's
 Live API for bidirectional audio streaming with function calling support.

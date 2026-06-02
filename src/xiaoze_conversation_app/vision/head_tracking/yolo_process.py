@@ -1,4 +1,4 @@
-﻿"""Run the optional YOLO head tracker in a dedicated subprocess."""
+"""Run the optional YOLO head tracker in a dedicated subprocess."""
 
 from __future__ import annotations
 import os

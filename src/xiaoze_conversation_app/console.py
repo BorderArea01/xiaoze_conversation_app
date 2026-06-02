@@ -1,4 +1,4 @@
-﻿"""Bidirectional local audio stream with optional settings UI.
+"""Bidirectional local audio stream with optional settings UI.
 
 In headless mode, there is no Gradio UI. If the selected backend is missing
 its required API key, we expose a minimal settings page via the Reachy Mini

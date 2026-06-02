@@ -1,4 +1,4 @@
-﻿"""Movement system with sequential primary moves and additive secondary moves.
+"""Movement system with sequential primary moves and additive secondary moves.
 
 Design overview
 - Primary moves (emotions, dances, goto, breathing) are mutually exclusive and run

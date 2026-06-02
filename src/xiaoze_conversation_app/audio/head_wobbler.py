@@ -1,4 +1,4 @@
-﻿"""Moves head given audio samples."""
+"""Moves head given audio samples."""
 
 import time
 import queue

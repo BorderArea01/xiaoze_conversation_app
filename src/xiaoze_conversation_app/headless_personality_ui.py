@@ -1,4 +1,4 @@
-﻿"""Settings UI routes for headless personality management.
+"""Settings UI routes for headless personality management.
 
 Exposes REST endpoints on the provided FastAPI settings app. The
 implementation schedules backend actions (apply personality, fetch voices)
@@ -335,3 +335,29 @@ def mount_personality_routes(
             return {"ok": True, "status": status}
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)  # type: ignore
+
+    @app.post('/personalities/delete')
+    async def _delete(name: str | None = None) -> dict:  # type: ignore
+        """Delete a user personality profile."""
+        if LOCKED_PROFILE is not None:
+            return JSONResponse(
+                {'ok': False, 'error': 'profile_locked', 'locked_to': LOCKED_PROFILE},
+                status_code=403,
+            )  # type: ignore
+        if not name:
+            return JSONResponse({'ok': False, 'error': 'missing_name'}, status_code=400)  # type: ignore
+        name_s = _sanitize_name(name)
+        if not name_s:
+            return JSONResponse({'ok': False, 'error': 'invalid_name'}, status_code=400)  # type: ignore
+        try:
+            import shutil
+            pdir = resolve_profile_dir(name_s)
+            if not pdir.exists():
+                return JSONResponse({'ok': False, 'error': 'not_found'}, status_code=404)  # type: ignore
+            shutil.rmtree(str(pdir))
+            logger.info('Headless delete: name=%r', name_s)
+            choices = [DEFAULT_OPTION, *list_personalities()]
+            return {'ok': True, 'choices': choices}
+        except Exception as e:
+            return JSONResponse({'ok': False, 'error': str(e)}, status_code=500)  # type: ignore
+

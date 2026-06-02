@@ -1,4 +1,4 @@
-﻿"""Background tool orchestrator for non-blocking tool execution.
+"""Background tool orchestrator for non-blocking tool execution.
 
 Allows tools to run long operations asynchronously while the robot
 continues conversing. Tools can be tracked, cancelled, and their

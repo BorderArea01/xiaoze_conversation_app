@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 import asyncio
 from abc import ABC, abstractmethod
 from typing import TypeAlias

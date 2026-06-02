@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from typing import Any, Dict, Tuple, Literal
 
 from reachy_mini.utils import create_head_pose

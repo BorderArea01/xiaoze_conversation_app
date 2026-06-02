@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from typing import Any, Dict
 
 from xiaoze_conversation_app.tools.core_tools import Tool, ToolDependencies

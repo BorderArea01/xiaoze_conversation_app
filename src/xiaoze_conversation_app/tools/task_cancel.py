@@ -1,4 +1,4 @@
-﻿"""Tool cancel tool - cancel running background tools."""
+"""Tool cancel tool - cancel running background tools."""
 
 import logging
 from typing import TYPE_CHECKING, Any, Dict

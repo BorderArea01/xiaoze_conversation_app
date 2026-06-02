@@ -1,4 +1,4 @@
-﻿"""Headless personality management (console-based).
+"""Headless personality management (console-based).
 
 Provides an interactive CLI to browse, preview, apply, create and edit
 "personalities" (profiles) when running without Gradio.

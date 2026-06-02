@@ -1,4 +1,4 @@
-﻿import base64
+import base64
 import asyncio
 import logging
 from typing import Any, Dict

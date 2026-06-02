@@ -1,4 +1,4 @@
-﻿"""MediaPipe head tracker backed by reachy_mini_toolbox."""
+"""MediaPipe head tracker backed by reachy_mini_toolbox."""
 
 import numpy as np
 from numpy.typing import NDArray

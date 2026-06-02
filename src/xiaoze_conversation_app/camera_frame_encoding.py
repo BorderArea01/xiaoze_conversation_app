@@ -1,4 +1,4 @@
-﻿"""Helpers for encoding camera frames."""
+"""Helpers for encoding camera frames."""
 
 from fractions import Fraction
 

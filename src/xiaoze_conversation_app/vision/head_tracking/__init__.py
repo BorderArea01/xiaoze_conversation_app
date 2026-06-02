@@ -1,4 +1,4 @@
-﻿"""Head-tracking backends and process helpers."""
+"""Head-tracking backends and process helpers."""
 
 from typing import Protocol, TypeAlias, SupportsFloat
 

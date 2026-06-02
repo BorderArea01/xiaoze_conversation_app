@@ -1,4 +1,4 @@
-﻿"""Camera worker thread with frame buffering and optional head tracking."""
+"""Camera worker thread with frame buffering and optional head tracking."""
 
 import time
 import logging

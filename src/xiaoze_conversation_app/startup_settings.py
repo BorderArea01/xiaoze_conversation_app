@@ -1,4 +1,4 @@
-﻿"""Helpers for persisting UI-selected startup profile and voice settings."""
+"""Helpers for persisting UI-selected startup profile and voice settings."""
 
 from __future__ import annotations
 import os
