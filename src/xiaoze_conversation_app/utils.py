@@ -32,13 +32,15 @@ def parse_args() -> tuple[argparse.Namespace, list]:  # type: ignore
         ),
     )
     parser.add_argument("--no-camera", default=False, action="store_true", help="Disable camera usage")
+    parser.add_argument("--no-move", default=False, action="store_true", help="Disable movement manager (no robot daemon connection needed)")
     parser.add_argument(
         "--local-vision",
         default=False,
         action="store_true",
         help="Use local vision model instead of the selected realtime backend vision",
     )
-    parser.add_argument("--gradio", default=False, action="store_true", help="Open gradio interface")
+    parser.add_argument("--gradio", default=True, action="store_true", help="Open gradio interface")
+    parser.add_argument("--no-gradio", dest="gradio", action="store_false", help="Disable gradio interface (headless mode)")
     parser.add_argument("--debug", default=False, action="store_true", help="Enable debug logging")
     parser.add_argument(
         "--robot-name",

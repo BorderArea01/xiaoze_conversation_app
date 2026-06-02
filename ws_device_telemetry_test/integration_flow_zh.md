@@ -1,4 +1,4 @@
-﻿# Reachy Mini 平台接口联调流程
+# Reachy Mini 平台接口联调流程
 
 这份文档用于确认当前平台接口联调结果，后续会基于这些结论开发 Reachy Mini app。
 

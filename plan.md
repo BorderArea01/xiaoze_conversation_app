@@ -1,4 +1,4 @@
-﻿# Reachy Mini Conversation App Build/Deploy Plan
+# Reachy Mini Conversation App Build/Deploy Plan
 
 ## Goal
 

@@ -1,4 +1,4 @@
-﻿"""Tests for BackgroundToolManager."""
+"Tests for BackgroundToolManager."""
 
 from __future__ import annotations
 import asyncio

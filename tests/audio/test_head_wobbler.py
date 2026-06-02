@@ -1,4 +1,4 @@
-﻿"""Regression tests for the audio-driven head wobble behaviour."""
+"Regression tests for the audio-driven head wobble behaviour."""
 
 import math
 import time

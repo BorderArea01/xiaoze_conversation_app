@@ -12,7 +12,9 @@ from pathlib import Path
 import gradio as gr
 from fastapi import FastAPI, Request
 from fastrtc import Stream
-from fastapi.responses import JSONResponse
+from fastapi import HTTPException
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from reachy_mini import ReachyMini, ReachyMiniApp
 from xiaoze_conversation_app.utils import (
@@ -23,7 +25,6 @@ from xiaoze_conversation_app.utils import (
     log_connection_troubleshooting,
     ensure_localhost_bypasses_proxy,
 )
-from xiaoze_conversation_app.platform_chat import send_platform_chat, mount_platform_chat_routes
 from xiaoze_conversation_app.text_action_bridge import (
     parse_text_actions,
     execute_text_actions,
@@ -32,51 +33,10 @@ from xiaoze_conversation_app.text_action_bridge import (
 )
 
 
-GRADIO_LOCALIZATION_JS = """
-() => {
-  const translations = new Map([
-    ["Chatbot", "对话记录"],
-    ["Stream", "语音连接"],
-    ["Click to Access Microphone", "点击开启麦克风"],
-    ["Toggle Sidebar", "展开/收起侧边栏"],
-    ["grant webcam access", "授权麦克风访问"],
-  ]);
-  const translateNode = (root) => {
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    const nodes = [];
-    while (walker.nextNode()) nodes.push(walker.currentNode);
-    for (const node of nodes) {
-      const value = node.nodeValue.trim();
-      if (translations.has(value)) node.nodeValue = node.nodeValue.replace(value, translations.get(value));
-    }
-    for (const el of root.querySelectorAll?.("[aria-label], [title]") || []) {
-      for (const attr of ["aria-label", "title"]) {
-        const value = el.getAttribute(attr);
-        if (translations.has(value)) el.setAttribute(attr, translations.get(value));
-      }
-    }
-  };
-  const run = () => {
-    translateNode(document.body);
-  };
-  new MutationObserver(run).observe(document.documentElement, { childList: true, subtree: true });
-  document.addEventListener("DOMContentLoaded", run);
-  run();
-}
-"""
-
 def update_chatbot(chatbot: List[Dict[str, Any]], response: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Update the chatbot with AdditionalOutputs."""
     chatbot.append(response)
     return chatbot
-
-
-async def typed_platform_chat(query: str) -> str:
-    """Send typed text to the platform websocket for manual probing."""
-    result = await send_platform_chat(query)
-    if not result.get("ok"):
-        raise gr.Error(str(result.get("error") or "platform_chat_failed"))
-    return str(result.get("text") or "(no text returned)")
 
 
 def main() -> None:
@@ -95,7 +55,12 @@ def run(
 ) -> None:
     """Run the Reachy Mini conversation app."""
     ensure_localhost_bypasses_proxy()
-    # Putting these dependencies here makes the dashboard faster to load when the conversation app is installed
+
+    # Configure HuggingFace mirror for environments without HF_ENDPOINT set
+    # (daemon subprocess doesn't source .bashrc)
+    if not os.environ.get("HF_ENDPOINT"):
+        os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+
     from xiaoze_conversation_app.moves import MovementManager
     from xiaoze_conversation_app.config import (
         HF_BACKEND,
@@ -189,7 +154,7 @@ def run(
             logger.error("Please check your configuration and try again.")
             sys.exit(1)
 
-    # Auto-enable Gradio in simulation mode (both MuJoCo for daemon and mockup-sim for desktop app)
+    # Auto-enable Gradio in simulation mode
     status = robot.client.get_status()
     if isinstance(status, dict):
         simulation_enabled = status.get("simulation_enabled", False)
@@ -210,12 +175,18 @@ def run(
         logger.error("Failed to initialize camera/vision: %s", e)
         sys.exit(1)
 
-    movement_manager = MovementManager(
-        current_robot=robot,
-        camera_worker=camera_worker,
-    )
+    movement_manager: MovementManager | None = None
+    head_wobbler: HeadWobbler | None = None
 
-    head_wobbler = HeadWobbler(set_speech_offsets=movement_manager.set_speech_offsets)
+    if not getattr(args, "no_move", False):
+        movement_manager = MovementManager(
+            current_robot=robot,
+            camera_worker=camera_worker,
+        )
+        head_wobbler = HeadWobbler(set_speech_offsets=movement_manager.set_speech_offsets)
+    else:
+        logger.info("Movement manager disabled (--no-move)")
+
     platform_config = PlatformClientConfig.from_env()
     platform_service = PlatformService(
         PlatformClient(platform_config),
@@ -239,19 +210,8 @@ def run(
         head_wobbler=head_wobbler,
     )
     ensure_tools_initialized()
-    current_file_path = os.path.dirname(os.path.abspath(__file__))
-    logger.debug(f"Current file absolute path: {current_file_path}")
-    chatbot = gr.Chatbot(
-        label="对话记录",
-        type="messages",
-        resizable=True,
-        avatar_images=(
-            os.path.join(current_file_path, "images", "user_avatar.png"),
-            os.path.join(current_file_path, "images", "reachymini_avatar.png"),
-        ),
-    )
-    logger.debug(f"Chatbot avatar images: {chatbot.avatar_images}")
 
+    # Select handler
     if config.BACKEND_PROVIDER == COMPOSED_BACKEND:
         from xiaoze_conversation_app.composed_chat import ComposedChatHandler
 
@@ -270,10 +230,7 @@ def run(
     elif is_gemini_model():
         from xiaoze_conversation_app.gemini_live import GeminiLiveHandler
 
-        logger.info(
-            "Using %s via GeminiLiveHandler",
-            get_backend_label(config.BACKEND_PROVIDER),
-        )
+        logger.info("Using %s via GeminiLiveHandler", get_backend_label(config.BACKEND_PROVIDER))
         handler = GeminiLiveHandler(
             deps,
             gradio_mode=args.gradio,
@@ -299,33 +256,27 @@ def run(
             gradio_mode=args.gradio,
             instance_path=instance_path,
             startup_voice=startup_settings.voice,
-        )  # type: ignore[assignment]
+        )
     elif config.BACKEND_PROVIDER == OPENAI_COMPATIBLE_BACKEND:
         from xiaoze_conversation_app.openai_compatible_realtime import OpenAICompatibleRealtimeHandler
 
-        logger.info(
-            "Using %s via OpenAI-compatible realtime handler",
-            get_backend_label(config.BACKEND_PROVIDER),
-        )
+        logger.info("Using %s via OpenAI-compatible realtime handler", get_backend_label(config.BACKEND_PROVIDER))
         handler = OpenAICompatibleRealtimeHandler(
             deps,
             gradio_mode=args.gradio,
             instance_path=instance_path,
             startup_voice=startup_settings.voice,
-        )  # type: ignore[assignment]
+        )
     elif config.BACKEND_PROVIDER == OPENAI_COMPATIBLE_CHAT_BACKEND:
         from xiaoze_conversation_app.openai_compatible_chat import OpenAICompatibleChatHandler
 
-        logger.info(
-            "Using %s via ASR + chat + TTS bridge",
-            get_backend_label(config.BACKEND_PROVIDER),
-        )
+        logger.info("Using %s via ASR + chat + TTS bridge", get_backend_label(config.BACKEND_PROVIDER))
         handler = OpenAICompatibleChatHandler(
             deps,
             gradio_mode=args.gradio,
             instance_path=instance_path,
             startup_voice=startup_settings.voice,
-        )  # type: ignore[assignment]
+        )
     elif config.BACKEND_PROVIDER == PLATFORM_AGENT_BACKEND:
         from xiaoze_conversation_app.platform_agent import PlatformAgentRealtimeHandler
 
@@ -338,7 +289,7 @@ def run(
             gradio_mode=args.gradio,
             instance_path=instance_path,
             startup_voice=startup_settings.voice,
-        )  # type: ignore[assignment]
+        )
     else:
         from xiaoze_conversation_app.openai_realtime import OpenaiRealtimeHandler
 
@@ -351,30 +302,155 @@ def run(
             gradio_mode=args.gradio,
             instance_path=instance_path,
             startup_voice=startup_settings.voice,
-        )  # type: ignore[assignment]
+        )
 
     stream_manager: gr.Blocks | LocalStream | None = None
+    shutdown_event = threading.Event()
 
-    if args.gradio:
-        from xiaoze_conversation_app.gradio_personality import PersonalityUI
+    def _handle_signal(signum, frame) -> None:
+        """Signal handler for SIGINT/SIGTERM — triggers graceful shutdown."""
+        logger.info("Received signal %s, initiating graceful shutdown", signum)
+        shutdown_event.set()
 
-        personality_ui = PersonalityUI()
-        personality_ui.create_components()
-        additional_inputs: list[Any] = [chatbot, *personality_ui.additional_inputs_ordered()]
+    # SPA mode: React SPA replaces Gradio UI
+    static_dir = Path(__file__).parent / "static"
+    # Prefer SPA if index.html exists; --no-spa overrides to fall back to Gradio
+    use_spa = (static_dir / "index.html").exists() and not getattr(args, "no_spa", False)
+    if use_spa:
+        args.gradio = False  # Disable Gradio code path in handler & metrics
+
+    if use_spa:
+        # --- SPA mode: FastAPI + React SPA ---
+        logger.info("Starting in SPA mode (React frontend)")
+
+        if not settings_app:
+            app = FastAPI()
+        else:
+            app = settings_app
+
+        from xiaoze_conversation_app.platform_chat import mount_platform_chat_routes
+        mount_platform_chat_routes(app)
+
+        @app.get("/status")
+        def _status() -> JSONResponse:
+            from xiaoze_conversation_app.config import (
+                get_available_voices_for_backend,
+                get_default_voice_for_backend,
+            )
+            import os
+            current_platform = PlatformClientConfig.from_env()
+            aliyun_key = os.getenv("ALIYUN_API_KEY") or os.getenv("DASHSCOPE_API_KEY") or ""
+            return JSONResponse({
+                "active_backend": config.BACKEND_PROVIDER,
+                "backend_provider": config.BACKEND_PROVIDER,
+                "has_key": True,
+                "has_aliyun_key": bool(aliyun_key.strip()),
+                "can_proceed": True,
+                "current_voice": get_default_voice_for_backend(),
+                "available_voices": get_available_voices_for_backend(),
+                "composed": {
+                    "asr_provider": os.getenv("ASR_PROVIDER", "openai"),
+                    "asr_base_url": os.getenv("ASR_BASE_URL", ""),
+                    "asr_model": os.getenv("ASR_MODEL", "gpt-4o-transcribe"),
+                    "asr_language": os.getenv("ASR_LANGUAGE", ""),
+                    "llm_provider": os.getenv("LLM_PROVIDER", "openai"),
+                    "llm_base_url": os.getenv("LLM_BASE_URL", ""),
+                    "llm_model": os.getenv("LLM_MODEL", "gpt-4o"),
+                    "tts_provider": os.getenv("TTS_PROVIDER", "openai"),
+                    "tts_base_url": os.getenv("TTS_BASE_URL", ""),
+                    "tts_model": os.getenv("TTS_MODEL", "tts-1"),
+                    "tts_voice": os.getenv("TTS_VOICE", "alloy"),
+                },
+                "platform": {
+                    "device_id": current_platform.device_id,
+                    "user_id": current_platform.user_id,
+                    "session_id": current_platform.session_id,
+                    "terminal_ws_url": current_platform.terminal_ws_url,
+                },
+            })
+
+        @app.get("/ready")
+        def _ready() -> JSONResponse:
+            return JSONResponse({"ready": True})
+
+        # Mount WebRTC stream without Gradio UI
+        stream = Stream(
+            handler=handler,
+            mode="send-receive",
+            modality="audio",
+        )
+        stream.mount(app)
+
+        # Register personality/voices routes BEFORE SPA fallback
+        # (catch-all /{path} would shadow routes registered after it)
+        try:
+            from xiaoze_conversation_app.headless_personality_ui import mount_personality_routes
+            mount_personality_routes(
+                app,
+                handler,
+                lambda: asyncio.get_event_loop() if asyncio.get_event_loop().is_running() else None,
+            )
+        except Exception as e:
+            logger.warning("Failed to mount personality routes: %s", e)
+
+        # Register backend_config, validate_api_key routes via minimal LocalStream
+        try:
+            _spa_local_stream = LocalStream(
+                handler,
+                robot,
+                settings_app=app,
+                instance_path=instance_path,
+            )
+            _spa_local_stream._init_settings_ui_if_needed()
+        except Exception as e:
+            logger.warning("Failed to mount settings UI routes: %s", e)
+
+        # Serve React build products
+        if static_dir.exists():
+            app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+            # Vite outputs assets under /assets/* in HTML but files are in static/assets/
+            assets_dir = static_dir / "assets"
+            if assets_dir.exists():
+                app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+            @app.get("/")
+            async def _index() -> FileResponse:
+                return FileResponse(str(static_dir / "index.html"))
+
+            @app.get("/{full_path:path}")
+            async def _spa_fallback(full_path: str) -> FileResponse:
+                if full_path.startswith(("api/", "webrtc/", "status", "platform_chat", "backend_config", "validate_api_key", "personalities", "voices", "ready", "openai_api_key")):
+                    raise HTTPException(status_code=404)
+                if (static_dir / "index.html").exists():
+                    return FileResponse(str(static_dir / "index.html"))
+                raise HTTPException(status_code=404)
+
+        stream_manager = app
+    elif args.gradio:
+        from xiaoze_conversation_app.gradio_personality import SimpleConfigUI
+        from xiaoze_conversation_app.platform_chat import send_platform_chat, mount_platform_chat_routes
+
+        ui = SimpleConfigUI()
+        ui.render()
 
         stream = Stream(
             handler=handler,
             mode="send-receive",
             modality="audio",
-            additional_inputs=additional_inputs,
-            additional_outputs=[chatbot],
+            additional_inputs=ui.all_config_inputs(),
+            additional_outputs=[ui.chatbot],
             additional_outputs_handler=update_chatbot,
-            ui_args={"title": "小泽机器人对话"},
+            ui_args={"title": "小泽机器人对话", "css": ui.CARD_CSS},
         )
         stream_manager = stream.ui
 
+        # Wire events within the Stream's Blocks context
+        with stream_manager:
+            ui.render_decorations()
+            ui.wire_events(instance_path)
+
+        # Text chat for platform (keeps local action bridge)
         async def typed_platform_chat_with_actions(query: str) -> str:
-            """Send typed text to the platform websocket and run local robot actions."""
             actions = parse_text_actions(query)
             action_results = await execute_text_actions(query, deps)
             action_text = format_action_results(action_results)
@@ -386,90 +462,7 @@ def run(
             parts = [action_text, str(result.get("text") or "(平台没有返回文本)")]
             return "\n\n".join(part for part in parts if part.strip())
 
-        def _read_env_lines(env_path: Path) -> list[str]:
-            try:
-                return env_path.read_text(encoding="utf-8").splitlines()
-            except FileNotFoundError:
-                return []
-
-        def _persist_env_values(updates: dict[str, str]) -> None:
-            normalized_updates = {name: (value or "").strip() for name, value in updates.items()}
-            normalized_updates = {name: value for name, value in normalized_updates.items() if value}
-            if not normalized_updates:
-                return
-
-            for env_name, value in normalized_updates.items():
-                os.environ[env_name] = value
-            refresh_runtime_config_from_env()
-
-            if not instance_path:
-                return
-
-            inst = Path(instance_path)
-            inst.mkdir(parents=True, exist_ok=True)
-            env_path = inst / ".env"
-            lines = _read_env_lines(env_path)
-            for env_name, value in normalized_updates.items():
-                replaced = False
-                for index, line in enumerate(lines):
-                    if line.strip().startswith(f"{env_name}="):
-                        lines[index] = f"{env_name}={value}"
-                        replaced = True
-                        break
-                if not replaced:
-                    lines.append(f"{env_name}={value}")
-            env_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
-
-        def save_platform_config_gradio(device_id: str, user_id: str, session_id: str, terminal_ws_url: str) -> str:
-            """Persist the small set of platform values users edit from the Gradio app."""
-            device_id = (device_id or "").strip()
-            user_id = (user_id or "").strip()
-            session_id = (session_id or "").strip()
-            terminal_ws_url = (terminal_ws_url or "").strip()
-            if not device_id or not user_id or not session_id or not terminal_ws_url:
-                raise gr.Error("设备号、用户 ID、会话 ID 和平台 WS 都需要填写。")
-            _persist_env_values(
-                {
-                    "BACKEND_PROVIDER": PLATFORM_AGENT_BACKEND,
-                    "REACHY_PLATFORM_DEVICE_ID": device_id,
-                    "REACHY_PLATFORM_USER_ID": user_id,
-                    "REACHY_PLATFORM_SESSION_ID": session_id,
-                    "REACHY_PLATFORM_TERMINAL_WS_URL": terminal_ws_url,
-                }
-            )
-            return "已保存。文字对话会立即使用新配置；语音连接建议重新进入应用后再测试。"
-
-        current_platform_config = PlatformClientConfig.from_env()
-        with stream_manager:
-            with gr.Accordion("设备配置", open=False):
-                platform_device_id = gr.Textbox(label="设备号", value=current_platform_config.device_id)
-                platform_user_id = gr.Textbox(label="用户 ID", value=current_platform_config.user_id)
-                platform_session_id = gr.Textbox(label="会话 ID", value=current_platform_config.session_id)
-                platform_terminal_ws = gr.Textbox(label="平台 WS", value=current_platform_config.terminal_ws_url)
-                platform_save_status = gr.Markdown()
-                platform_save = gr.Button("保存设备配置")
-                platform_save.click(
-                    save_platform_config_gradio,
-                    inputs=[platform_device_id, platform_user_id, platform_session_id, platform_terminal_ws],
-                    outputs=platform_save_status,
-                    api_name="save_device_config",
-                )
-            with gr.Accordion("平台文字对话", open=False):
-                typed_query = gr.Textbox(
-                    label="输入文字",
-                    lines=3,
-                    placeholder="帮我查询今天的访客登记情况",
-                )
-                typed_answer = gr.Textbox(label="平台回复", lines=6)
-                typed_send = gr.Button("发送")
-                typed_send.click(
-                    typed_platform_chat_with_actions,
-                    inputs=typed_query,
-                    outputs=typed_answer,
-                    api_name="platform_chat",
-                )
-            personality_ui.create_config_accordions(stream_manager, instance_path)
-            stream_manager.load(fn=None, js=GRADIO_LOCALIZATION_JS)
+        # FastAPI app + routes
         if not settings_app:
             app = FastAPI()
         else:
@@ -477,76 +470,21 @@ def run(
 
         mount_platform_chat_routes(app)
 
-        def _gradio_status_payload() -> dict[str, Any]:
+        @app.get("/status")
+        def _status() -> JSONResponse:
             current_platform = PlatformClientConfig.from_env()
-            return {
+            return JSONResponse({
                 "active_backend": config.BACKEND_PROVIDER,
                 "backend_provider": config.BACKEND_PROVIDER,
                 "has_key": True,
-                "has_platform_agent_key": True,
-                "has_platform_asr_tts_key": bool(config.OPENAI_COMPATIBLE_API_KEY),
                 "can_proceed": True,
-                "can_proceed_with_platform_agent": True,
-                "requires_restart": False,
                 "platform": {
-                    "token_configured": bool(current_platform.token),
-                    "enabled": current_platform.enabled,
-                    "activate_on_start": current_platform.activate_on_start,
-                    "http_base_url": current_platform.http_base_url,
-                    "telemetry_ws_url": current_platform.telemetry_ws_url,
-                    "terminal_ws_url": current_platform.terminal_ws_url,
                     "device_id": current_platform.device_id,
-                    "device_name": current_platform.device_name,
-                    "device_type_name": current_platform.device_type_name,
                     "user_id": current_platform.user_id,
                     "session_id": current_platform.session_id,
-                    "activation_code": current_platform.activation_code,
+                    "terminal_ws_url": current_platform.terminal_ws_url,
                 },
-            }
-
-        @app.get("/status")
-        def _status() -> JSONResponse:
-            return JSONResponse(_gradio_status_payload())
-
-        @app.post("/backend_config")
-        async def _set_backend_config(request: Request) -> JSONResponse:
-            payload = await request.json()
-            backend = str(payload.get("backend") or PLATFORM_AGENT_BACKEND).strip().lower()
-            if backend != PLATFORM_AGENT_BACKEND:
-                return JSONResponse({"ok": False, "error": "unsupported_backend_in_gradio_mode"}, status_code=400)
-
-            updates = {
-                "BACKEND_PROVIDER": PLATFORM_AGENT_BACKEND,
-                "MODEL_NAME": "",
-                "REACHY_PLATFORM_TOKEN": payload.get("platform_token") or "",
-                "REACHY_PLATFORM_DEVICE_ID": payload.get("platform_device_id") or "",
-                "REACHY_PLATFORM_USER_ID": payload.get("platform_user_id") or "",
-                "REACHY_PLATFORM_SESSION_ID": payload.get("platform_session_id") or "",
-                "REACHY_PLATFORM_TERMINAL_WS_URL": payload.get("platform_terminal_ws_url") or "",
-                "REACHY_PLATFORM_TELEMETRY_WS_URL": payload.get("platform_telemetry_ws_url") or "",
-                "REACHY_PLATFORM_HTTP_BASE_URL": payload.get("platform_http_base_url") or "",
-                "REACHY_PLATFORM_DEVICE_NAME": payload.get("platform_device_name") or "",
-                "REACHY_PLATFORM_DEVICE_TYPE_NAME": payload.get("platform_device_type_name") or "",
-                "REACHY_PLATFORM_ACTIVATION_CODE": payload.get("platform_activation_code") or "",
-            }
-            api_key = str(payload.get("api_key") or "").strip()
-            if api_key:
-                updates["OPENAI_COMPATIBLE_API_KEY"] = api_key
-            if payload.get("platform_enabled") is not None:
-                updates["REACHY_PLATFORM_ENABLED"] = "1" if payload.get("platform_enabled") else "0"
-            if payload.get("platform_activate_on_start") is not None:
-                updates["REACHY_PLATFORM_ACTIVATE_ON_START"] = "1" if payload.get("platform_activate_on_start") else "0"
-
-            _persist_env_values(updates)
-            return JSONResponse(
-                {
-                    "ok": True,
-                    "message": "Device configuration saved.",
-                    **_gradio_status_payload(),
-                }
-            )
-
-        personality_ui.wire_events(handler, stream_manager)
+            })
 
         app = gr.mount_gradio_app(app, stream.ui, path="/")
     else:
@@ -558,9 +496,11 @@ def run(
             instance_path=instance_path,
         )
 
-    # Each async service gets its own thread/loop.
-    movement_manager.start()
-    head_wobbler.start()
+    # Start async services
+    if movement_manager:
+        movement_manager.start()
+    if head_wobbler:
+        head_wobbler.start()
     platform_service.start()
     if camera_worker:
         camera_worker.start()
@@ -571,32 +511,61 @@ def run(
             app_stop_event.wait()
 
         logger.info("App stop event detected, shutting down...")
+        shutdown_event.set()
         try:
-            stream_manager.close()
+            if use_spa:
+                # SPA mode: FastAPI doesn't have close(), uvicorn handles shutdown
+                pass
+            else:
+                stream_manager.close()
         except Exception as e:
             logger.error(f"Error while closing stream manager: {e}")
 
     if app_stop_event:
         threading.Thread(target=poll_stop_event, daemon=True).start()
 
+    # Install signal handlers for graceful shutdown when daemon sends SIGINT
+    if os.name == "posix":
+        import signal as sig_module
+        original_sigint_handler = sig_module.getsignal(sig_module.SIGINT)
+        sig_module.signal(sig_module.SIGINT, _handle_signal)
+        sig_module.signal(sig_module.SIGTERM, _handle_signal)
+
     try:
-        stream_manager.launch()
+        if use_spa:
+            import uvicorn
+            uvicorn_cfg = uvicorn.Config(app, host="0.0.0.0", port=7860, log_level="info")
+            server = uvicorn.Server(uvicorn_cfg)
+            # Run uvicorn in a thread so we can poll shutdown_event
+            uvicorn_thread = threading.Thread(target=server.run, daemon=True)
+            uvicorn_thread.start()
+            # Block main thread on shutdown_event (set by signal handler or stop event)
+            while not shutdown_event.is_set():
+                shutdown_event.wait(timeout=1.0)
+            logger.info("Shutdown event detected, stopping uvicorn server...")
+            server.should_exit = True
+            uvicorn_thread.join(timeout=10)
+        elif args.gradio:
+            stream_manager.launch(server_name="0.0.0.0", server_port=7860)
+        else:
+            stream_manager.launch()
     except KeyboardInterrupt:
         logger.info("Keyboard interruption in main thread... closing server.")
+        shutdown_event.set()
     finally:
-        movement_manager.stop()
-        head_wobbler.stop()
+        if movement_manager:
+            movement_manager.stop()
+        if head_wobbler:
+            head_wobbler.stop()
         platform_service.stop()
         if camera_worker:
             camera_worker.stop()
 
-        # Ensure media is explicitly closed before disconnecting
         try:
             robot.media.close()
         except Exception as e:
             logger.debug(f"Error closing media during shutdown: {e}")
 
-        # prevent connection to keep alive some threads
         robot.client.disconnect()
         time.sleep(1)
         logger.info("Shutdown complete.")
@@ -606,7 +575,7 @@ class XiaozeConversationApp(ReachyMiniApp):  # type: ignore[misc]
     """Reachy Mini Apps entry point for the conversation app."""
 
     custom_app_url = "http://0.0.0.0:7860/"
-    dont_start_webserver = False
+    dont_start_webserver = True
 
     def run(self, reachy_mini: ReachyMini, stop_event: threading.Event) -> None:
         """Run the Reachy Mini conversation app."""

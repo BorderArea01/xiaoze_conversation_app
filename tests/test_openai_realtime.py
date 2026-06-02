@@ -1,4 +1,4 @@
-﻿import random
+port random
 import asyncio
 import logging
 from types import SimpleNamespace

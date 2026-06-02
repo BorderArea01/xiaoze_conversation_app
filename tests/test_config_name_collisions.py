@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+om pathlib import Path
 
 import pytest
 

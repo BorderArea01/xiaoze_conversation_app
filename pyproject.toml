@@ -1,4 +1,4 @@
-﻿[build-system]
+[build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
@@ -83,6 +83,9 @@ dependency-metadata = [
 ]
 
 [project.entry-points."xiaoze_apps"]
+xiaoze_conversation_app = "xiaoze_conversation_app.main:XiaozeConversationApp"
+
+[project.entry-points."reachy_mini_apps"]
 xiaoze_conversation_app = "xiaoze_conversation_app.main:XiaozeConversationApp"
 
 [tool.setuptools]

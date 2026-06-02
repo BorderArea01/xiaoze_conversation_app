@@ -1,4 +1,4 @@
-﻿# Reachy Mini Conversation App 构建与部署流程
+ Reachy Mini Conversation App 构建与部署流程
 
 本文按 Reachy Mini 官方 SDK 与 Hugging Face 发布流程整理，面向当前项目 `xiaoze_conversation_app`。
 

@@ -1,4 +1,4 @@
-﻿import sys
+port sys
 import importlib
 from types import ModuleType
 from pathlib import Path

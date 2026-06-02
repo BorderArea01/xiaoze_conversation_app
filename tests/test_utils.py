@@ -1,4 +1,4 @@
-﻿"""Tests for utility helpers."""
+"Tests for utility helpers."""
 
 import argparse
 from unittest.mock import MagicMock, patch

@@ -16,6 +16,7 @@ from scipy.signal import resample
 
 from xiaoze_conversation_app.config import (
     COMPOSED_BACKEND,
+    ALIYUN_BASE_URL,
     config,
     set_custom_profile,
     get_default_voice_for_backend,
@@ -42,12 +43,22 @@ def _client(api_key: str, base_url: str | None) -> AsyncOpenAI:
 
 
 def _api_key() -> str:
-    """Resolve API key with fallback chain: component-specific -> OpenAI compatible -> OpenAI."""
+    """Resolve API key with fallback chain: Aliyun -> component-specific -> OpenAI compatible -> OpenAI."""
     return (
-        (config.OPENAI_COMPATIBLE_API_KEY or "").strip()
+        (config.ALIYUN_API_KEY or "").strip()
+        or (config.OPENAI_COMPATIBLE_API_KEY or "").strip()
         or (config.OPENAI_API_KEY or "").strip()
         or "DUMMY"
     )
+
+
+def _resolve_base_url(provider: str, configured_url: str) -> str | None:
+    """Resolve the effective base URL for a provider, applying defaults."""
+    if configured_url:
+        return configured_url.strip() or None
+    if provider == "aliyun":
+        return ALIYUN_BASE_URL
+    return None
 
 
 def _tool_specs_for_chat(tool_specs: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -127,12 +138,30 @@ class ComposedChatHandler(ConversationHandler):
         self._messages: list[dict[str, Any]] = []
 
         key = _api_key()
-        self.asr_client = _client(key, config.ASR_BASE_URL or None)
-        self.llm_client = _client(key, config.LLM_BASE_URL or None)
-        self.tts_client = _client(key, config.TTS_BASE_URL or None)
+        self.asr_client = _client(key, _resolve_base_url(config.ASR_PROVIDER, config.ASR_BASE_URL))
+        self.llm_client = _client(key, _resolve_base_url(config.LLM_PROVIDER, config.LLM_BASE_URL))
+        self.tts_client = _client(key, _resolve_base_url(config.TTS_PROVIDER, config.TTS_BASE_URL))
 
         logger.info(
             "ComposedChatHandler: ASR=%s@%s LLM=%s@%s TTS=%s@%s",
+            config.ASR_PROVIDER, config.ASR_BASE_URL or "(default)",
+            config.LLM_PROVIDER, config.LLM_BASE_URL or "(default)",
+            config.TTS_PROVIDER, config.TTS_BASE_URL or "(default)",
+        )
+
+    def _build_clients(self) -> None:
+        """(Re)create ASR/LLM/TTS clients from current runtime config."""
+        key = _api_key()
+        self.asr_client = _client(key, _resolve_base_url(config.ASR_PROVIDER, config.ASR_BASE_URL))
+        self.llm_client = _client(key, _resolve_base_url(config.LLM_PROVIDER, config.LLM_BASE_URL))
+        self.tts_client = _client(key, _resolve_base_url(config.TTS_PROVIDER, config.TTS_BASE_URL))
+
+    def reload_config(self) -> None:
+        """Hot-reload config without restart — recreate clients, clear conversation."""
+        self._build_clients()
+        self._messages = []
+        logger.info(
+            "ComposedChatHandler reloaded: ASR=%s@%s LLM=%s@%s TTS=%s@%s",
             config.ASR_PROVIDER, config.ASR_BASE_URL or "(default)",
             config.LLM_PROVIDER, config.LLM_BASE_URL or "(default)",
             config.TTS_PROVIDER, config.TTS_BASE_URL or "(default)",

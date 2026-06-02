@@ -1,4 +1,4 @@
-﻿"""Tests for the camera tool."""
+"Tests for the camera tool."""
 
 import base64
 from io import BytesIO

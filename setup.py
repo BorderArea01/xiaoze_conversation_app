@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 from shutil import copytree
 from pathlib import Path
 

@@ -762,14 +762,13 @@ class MovementManager:
         try:
             neutral_head_pose = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
             neutral_antennas = [-0.1745, 0.1745]  # ~10° offset to reduce shaking
-            neutral_body_yaw = 0.0
 
-            # Use goto_target directly on the robot
+            # Use goto_target directly on the robot (don't rotate body)
             self.current_robot.goto_target(
                 head=neutral_head_pose,
                 antennas=neutral_antennas,
                 duration=2.0,
-                body_yaw=neutral_body_yaw,
+                body_yaw=None,  # Don't rotate body on shutdown
             )
 
             logger.info("Reset to neutral position completed")

@@ -1,4 +1,4 @@
-﻿"""Tests for the vision processing module."""
+"Tests for the vision processing module."""
 
 from typing import Any
 from unittest.mock import MagicMock, patch

@@ -1,4 +1,4 @@
-﻿"""Tests for Reachy Mini audio startup configuration."""
+"Tests for Reachy Mini audio startup configuration."""
 
 from __future__ import annotations
 from types import SimpleNamespace

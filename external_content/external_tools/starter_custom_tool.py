@@ -1,4 +1,4 @@
-﻿"""Example external tool implementation."""
+"""Example external tool implementation."""
 
 import logging
 from typing import Any, Dict

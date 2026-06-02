@@ -1,4 +1,4 @@
-﻿"""Tests for persisted instance-local startup settings."""
+"Tests for persisted instance-local startup settings."""
 
 from xiaoze_conversation_app.startup_settings import (
     StartupSettings,

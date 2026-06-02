@@ -85,6 +85,16 @@ GEMINI_AVAILABLE_VOICES: list[str] = [
     "Zephyr",
 ]
 
+# Voices supported by the Aliyun Bailian DashScope API (Qwen3.5-Omni)
+ALIYUN_AVAILABLE_VOICES: list[str] = [
+    "Ethan", "Cherry", "Serena", "Chelsie", "Maia", "Vivian",
+    "Momo", "Nini", "Stella", "Ono Anna", "Seren", "Mia",
+    "Bella", "Bunny", "Bellona", "Katerina", "Elias", "Sohee",
+    "Ebana", "Ryan", "Moon", "Kai", "Nofish", "Neil",
+    "Andre", "Lenn", "Vincent", "Eldric Sage", "Arthur",
+    "Mochi", "Dylan",
+]
+
 OPENAI_BACKEND = "openai"
 OPENAI_COMPATIBLE_BACKEND = "openai_compatible"
 OPENAI_COMPATIBLE_CHAT_BACKEND = "openai_compatible_chat"
@@ -92,6 +102,8 @@ PLATFORM_AGENT_BACKEND = "platform_agent"
 GEMINI_BACKEND = "gemini"
 HF_BACKEND = "huggingface"
 COMPOSED_BACKEND = "composed"
+ALIYUN_BACKEND = "aliyun"
+ALIYUN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 DEFAULT_BACKEND_PROVIDER = COMPOSED_BACKEND
 HF_REALTIME_CONNECTION_MODE_ENV = "HF_REALTIME_CONNECTION_MODE"
 HF_REALTIME_WS_URL_ENV = "HF_REALTIME_WS_URL"
@@ -124,6 +136,7 @@ DEFAULT_MODEL_NAME_BY_BACKEND = {
     GEMINI_BACKEND: "gemini-3.1-flash-live-preview",
     HF_BACKEND: HF_DEFAULTS.model_name,
     COMPOSED_BACKEND: "",
+    ALIYUN_BACKEND: "qwen3.5-omni-flash-realtime",
 }
 BACKEND_LABEL_BY_PROVIDER = {
     OPENAI_BACKEND: "OpenAI Realtime",
@@ -133,6 +146,7 @@ BACKEND_LABEL_BY_PROVIDER = {
     GEMINI_BACKEND: "Gemini Live",
     HF_BACKEND: "Hugging Face",
     COMPOSED_BACKEND: "ASR+LLM+TTS 自由搭配",
+    ALIYUN_BACKEND: "阿里云百炼",
 }
 COMPOSED_VOICE_DEFAULT = "alloy"
 DEFAULT_VOICE_BY_BACKEND = {
@@ -143,6 +157,7 @@ DEFAULT_VOICE_BY_BACKEND = {
     GEMINI_BACKEND: "Kore",
     HF_BACKEND: HF_DEFAULTS.voice,
     COMPOSED_BACKEND: COMPOSED_VOICE_DEFAULT,
+    ALIYUN_BACKEND: "Ethan",
 }
 
 logger = logging.getLogger(__name__)
@@ -372,6 +387,7 @@ class Config:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # The key is downloaded in console.py if needed
     OPENAI_COMPATIBLE_API_KEY = os.getenv("OPENAI_COMPATIBLE_API_KEY")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    ALIYUN_API_KEY = os.getenv("ALIYUN_API_KEY") or os.getenv("DASHSCOPE_API_KEY")
 
     # Optional
     BACKEND_PROVIDER = _normalize_backend_provider(
@@ -509,6 +525,7 @@ def refresh_runtime_config_from_env() -> None:
     config.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
     config.OPENAI_COMPATIBLE_API_KEY = os.getenv("OPENAI_COMPATIBLE_API_KEY")
     config.GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    config.ALIYUN_API_KEY = os.getenv("ALIYUN_API_KEY") or os.getenv("DASHSCOPE_API_KEY")
     config.BACKEND_PROVIDER = _normalize_backend_provider(
         os.getenv("BACKEND_PROVIDER"),
         os.getenv("MODEL_NAME"),
@@ -585,6 +602,12 @@ def get_available_voices_for_backend(backend: str | None = None) -> list[str]:
         return list(GEMINI_AVAILABLE_VOICES)
     if normalized_backend == HF_BACKEND:
         return list(HF_AVAILABLE_VOICES)
+    if normalized_backend == ALIYUN_BACKEND:
+        return list(ALIYUN_AVAILABLE_VOICES)
+    if normalized_backend == COMPOSED_BACKEND:
+        tts_provider = (os.getenv("TTS_PROVIDER") or "openai").strip().lower()
+        if tts_provider == "aliyun":
+            return list(ALIYUN_AVAILABLE_VOICES)
     if normalized_backend in {OPENAI_COMPATIBLE_BACKEND, OPENAI_COMPATIBLE_CHAT_BACKEND, PLATFORM_AGENT_BACKEND, COMPOSED_BACKEND}:
         configured_voice = (getattr(config, "TTS_VOICE", None) or getattr(config, "OPENAI_COMPATIBLE_VOICE", None) or "").strip()
         voices = list(AVAILABLE_VOICES)
@@ -597,6 +620,12 @@ def get_available_voices_for_backend(backend: str | None = None) -> list[str]:
 def get_default_voice_for_backend(backend: str | None = None) -> str:
     """Return the default voice for a backend selector value."""
     normalized_backend = get_backend_choice() if backend is None else _normalize_backend_provider(backend)
+    if normalized_backend == ALIYUN_BACKEND:
+        return "Ethan"
+    if normalized_backend == COMPOSED_BACKEND:
+        tts_provider = (os.getenv("TTS_PROVIDER") or "openai").strip().lower()
+        if tts_provider == "aliyun":
+            return "Ethan"
     if normalized_backend in {OPENAI_COMPATIBLE_BACKEND, OPENAI_COMPATIBLE_CHAT_BACKEND, PLATFORM_AGENT_BACKEND, COMPOSED_BACKEND}:
         configured_voice = (getattr(config, "TTS_VOICE", None) or getattr(config, "OPENAI_COMPATIBLE_VOICE", None) or "").strip()
         return configured_voice or DEFAULT_VOICE_BY_BACKEND[normalized_backend]

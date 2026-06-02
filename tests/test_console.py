@@ -1,4 +1,4 @@
-﻿"""Tests for the headless console stream."""
+"Tests for the headless console stream."""
 
 import sys
 import asyncio

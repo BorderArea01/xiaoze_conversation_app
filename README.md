@@ -1,4 +1,4 @@
-﻿---
+---
 title: Xiaoze Conversation App
 emoji: 🎤
 colorFrom: red

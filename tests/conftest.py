@@ -1,4 +1,4 @@
-"""Pytest configuration for path setup."""
+"Pytest configuration for path setup."""
 
 import os
 import sys

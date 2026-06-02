@@ -1,4 +1,4 @@
-﻿"""Behavior tests for the Gemini Live handler."""
+"Behavior tests for the Gemini Live handler."""
 
 import base64
 import asyncio

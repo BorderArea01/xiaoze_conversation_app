@@ -1,4 +1,4 @@
-﻿# Contributing
+# Contributing
 
 Thank you for helping improve Reachy Mini Conversation App! 🤖
 

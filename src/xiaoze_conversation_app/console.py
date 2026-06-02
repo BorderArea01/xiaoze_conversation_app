@@ -29,6 +29,8 @@ from xiaoze_conversation_app.config import (
     GEMINI_BACKEND,
     LOCKED_PROFILE,
     OPENAI_BACKEND,
+    ALIYUN_BACKEND,
+    COMPOSED_BACKEND,
     HF_REALTIME_WS_URL_ENV,
     PLATFORM_AGENT_BACKEND,
     HF_LOCAL_CONNECTION_MODE,
@@ -180,6 +182,8 @@ class LocalStream:
             return self._has_key(config.GEMINI_API_KEY)
         if backend == HF_BACKEND:
             return has_hf_realtime_target()
+        if backend == ALIYUN_BACKEND:
+            return self._has_key(config.ALIYUN_API_KEY)
         if backend in {OPENAI_COMPATIBLE_BACKEND, OPENAI_COMPATIBLE_CHAT_BACKEND}:
             return self._has_key(config.OPENAI_COMPATIBLE_API_KEY)
         if backend == PLATFORM_AGENT_BACKEND:
@@ -193,6 +197,8 @@ class LocalStream:
             return "GEMINI_API_KEY"
         if backend == HF_BACKEND:
             return HF_REALTIME_WS_URL_ENV
+        if backend == ALIYUN_BACKEND:
+            return "ALIYUN_API_KEY"
         if backend in {OPENAI_COMPATIBLE_BACKEND, OPENAI_COMPATIBLE_CHAT_BACKEND}:
             return "OPENAI_COMPATIBLE_API_KEY"
         if backend == PLATFORM_AGENT_BACKEND:
@@ -217,11 +223,11 @@ class LocalStream:
                 pass
         refresh_runtime_config_from_env()
 
-        if not self._instance_path:
-            return
         try:
-            inst = Path(self._instance_path)
-            env_path = inst / ".env"
+            if self._instance_path:
+                env_path = Path(self._instance_path) / ".env"
+            else:
+                env_path = Path(__file__).parent / ".env"
             lines = self._read_env_lines(env_path)
             for env_name, value in normalized_updates.items():
                 replaced = False
@@ -299,6 +305,10 @@ class LocalStream:
     def _persist_openai_compatible_api_key(self, key: str) -> None:
         """Persist OPENAI_COMPATIBLE_API_KEY to environment and instance `.env`."""
         self._persist_env_value("OPENAI_COMPATIBLE_API_KEY", key)
+
+    def _persist_aliyun_api_key(self, key: str) -> None:
+        """Persist ALIYUN_API_KEY to environment and instance `.env`."""
+        self._persist_env_value("ALIYUN_API_KEY", key)
 
     def _persist_backend_choice(self, backend: str) -> None:
         """Persist the selected backend without clobbering explicit model overrides."""
@@ -378,6 +388,7 @@ class LocalStream:
         class BackendPayload(BaseModel):
             backend: str
             api_key: Optional[str] = None
+            aliyun_api_key: Optional[str] = None
             hf_mode: Optional[str] = None
             hf_host: Optional[str] = None
             hf_port: Optional[int] = None
@@ -393,6 +404,18 @@ class LocalStream:
             platform_activation_code: Optional[str] = None
             platform_enabled: Optional[bool] = None
             platform_activate_on_start: Optional[bool] = None
+            # Composed backend component settings
+            asr_provider: Optional[str] = None
+            asr_base_url: Optional[str] = None
+            asr_model: Optional[str] = None
+            asr_language: Optional[str] = None
+            llm_provider: Optional[str] = None
+            llm_base_url: Optional[str] = None
+            llm_model: Optional[str] = None
+            tts_provider: Optional[str] = None
+            tts_base_url: Optional[str] = None
+            tts_model: Optional[str] = None
+            tts_voice: Optional[str] = None
 
         mount_platform_chat_routes(self._settings_app)
 
@@ -404,6 +427,8 @@ class LocalStream:
             has_platform_agent_key = self._has_required_key(PLATFORM_AGENT_BACKEND)
             has_platform_asr_tts_key = self._has_key(config.OPENAI_COMPATIBLE_API_KEY)
             has_gemini_key = self._has_required_key(GEMINI_BACKEND)
+            has_aliyun_key = self._has_required_key(ALIYUN_BACKEND)
+            can_proceed_with_aliyun = has_aliyun_key
             hf_session_url = get_hf_session_url()
             hf_ws_url = get_hf_direct_ws_url()
             hf_direct_host, hf_direct_port = parse_hf_direct_target(hf_ws_url)
@@ -440,6 +465,8 @@ class LocalStream:
                 "can_proceed_with_platform_agent": can_proceed_with_platform_agent,
                 "can_proceed_with_gemini": can_proceed_with_gemini,
                 "can_proceed_with_hf": can_proceed_with_hf,
+                "can_proceed_with_aliyun": can_proceed_with_aliyun,
+                "has_aliyun_key": has_aliyun_key,
                 "requires_restart": requires_restart,
                 "platform": {
                     "token_configured": bool(os.getenv("REACHY_PLATFORM_TOKEN")),
@@ -507,6 +534,8 @@ class LocalStream:
                 OPENAI_COMPATIBLE_CHAT_BACKEND,
                 GEMINI_BACKEND,
                 HF_BACKEND,
+                ALIYUN_BACKEND,
+                COMPOSED_BACKEND,
             }:
                 return JSONResponse({"ok": False, "error": "invalid_backend"}, status_code=400)
 
@@ -522,6 +551,12 @@ class LocalStream:
                 self._persist_openai_compatible_api_key(api_key)
             if backend == GEMINI_BACKEND and api_key:
                 self._persist_gemini_api_key(api_key)
+            if backend == ALIYUN_BACKEND:
+                aliyun_key = (payload.aliyun_api_key or "").strip()
+                if not aliyun_key and not self._has_required_key(ALIYUN_BACKEND):
+                    return JSONResponse({"ok": False, "error": "empty_key"}, status_code=400)
+                if aliyun_key:
+                    self._persist_aliyun_api_key(aliyun_key)
             if backend == PLATFORM_AGENT_BACKEND:
                 platform_updates = {
                     "REACHY_PLATFORM_TOKEN": platform_token,
@@ -566,6 +601,49 @@ class LocalStream:
                     return JSONResponse({"ok": False, "error": "invalid_hf_mode"}, status_code=400)
 
             self._persist_backend_choice(backend)
+
+            # Hot-reload composed backend — no restart needed
+            if backend == COMPOSED_BACKEND:
+                composed_updates = {}
+                if payload.asr_provider:
+                    composed_updates["ASR_PROVIDER"] = payload.asr_provider.strip().lower()
+                if payload.asr_base_url is not None:
+                    composed_updates["ASR_BASE_URL"] = payload.asr_base_url.strip()
+                if payload.asr_model:
+                    composed_updates["ASR_MODEL"] = payload.asr_model.strip()
+                if payload.asr_language is not None:
+                    composed_updates["ASR_LANGUAGE"] = payload.asr_language.strip()
+                if payload.llm_provider:
+                    composed_updates["LLM_PROVIDER"] = payload.llm_provider.strip().lower()
+                if payload.llm_base_url is not None:
+                    composed_updates["LLM_BASE_URL"] = payload.llm_base_url.strip()
+                if payload.llm_model:
+                    composed_updates["LLM_MODEL"] = payload.llm_model.strip()
+                if payload.tts_provider:
+                    composed_updates["TTS_PROVIDER"] = payload.tts_provider.strip().lower()
+                if payload.tts_base_url is not None:
+                    composed_updates["TTS_BASE_URL"] = payload.tts_base_url.strip()
+                if payload.tts_model:
+                    composed_updates["TTS_MODEL"] = payload.tts_model.strip()
+                if payload.tts_voice is not None:
+                    composed_updates["TTS_VOICE"] = payload.tts_voice.strip()
+                self._persist_env_values(composed_updates)
+
+                # Persist Aliyun API key if provided
+                if payload.aliyun_api_key and payload.aliyun_api_key.strip():
+                    self._persist_aliyun_api_key(payload.aliyun_api_key.strip())
+
+                refresh_runtime_config_from_env()
+
+                # Hot-reload handler clients without restart
+                from xiaoze_conversation_app.composed_chat import ComposedChatHandler
+                if isinstance(self.handler, ComposedChatHandler):
+                    self.handler.reload_config()
+                    message = "Backend saved. 已立即生效，无需重启。"
+                    payload_data = _status_payload()
+                    payload_data["requires_restart"] = False
+                    return JSONResponse({"ok": True, "message": message, **payload_data})
+
             payload_data = _status_payload()
             message = "Backend saved."
             if payload_data["requires_restart"]:

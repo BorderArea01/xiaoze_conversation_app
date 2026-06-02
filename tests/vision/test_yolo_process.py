@@ -1,4 +1,4 @@
-﻿"""Tests for the YOLO tracking process."""
+"Tests for the YOLO tracking process."""
 
 from __future__ import annotations
 import os
