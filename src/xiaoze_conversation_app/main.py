@@ -380,6 +380,14 @@ def run(
                     can_proceed = False
                 if "openai" in component_providers and not openai_key.strip():
                     can_proceed = False
+            current_voice = get_default_voice_for_backend()
+            try:
+                handler_voice = getattr(handler, "get_current_voice", None)
+                if callable(handler_voice):
+                    current_voice = str(handler_voice())
+            except Exception:
+                pass
+
             return JSONResponse({
                 "active_backend": config.BACKEND_PROVIDER,
                 "backend_provider": config.BACKEND_PROVIDER,
@@ -387,7 +395,7 @@ def run(
                 "has_aliyun_key": bool(aliyun_key.strip()),
                 "has_openai_compatible_key": bool(openai_compatible_key.strip()),
                 "can_proceed": can_proceed,
-                "current_voice": get_default_voice_for_backend(),
+                "current_voice": current_voice,
                 "available_voices": get_available_voices_for_backend(),
                 "realtime": {
                     "provider": config.BACKEND_PROVIDER,

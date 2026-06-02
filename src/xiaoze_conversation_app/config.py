@@ -166,7 +166,7 @@ DEFAULT_VOICE_BY_BACKEND = {
     GEMINI_BACKEND: "Kore",
     HF_BACKEND: HF_DEFAULTS.voice,
     COMPOSED_BACKEND: COMPOSED_VOICE_DEFAULT,
-    ALIYUN_BACKEND: "Ethan",
+    ALIYUN_BACKEND: "Cherry",
 }
 
 logger = logging.getLogger(__name__)
@@ -639,11 +639,11 @@ def get_default_voice_for_backend(backend: str | None = None) -> str:
     """Return the default voice for a backend selector value."""
     normalized_backend = get_backend_choice() if backend is None else _normalize_backend_provider(backend)
     if normalized_backend == ALIYUN_BACKEND:
-        return "Ethan"
+        return DEFAULT_VOICE_BY_BACKEND[ALIYUN_BACKEND]
     if normalized_backend == COMPOSED_BACKEND:
         tts_provider = (os.getenv("TTS_PROVIDER") or "openai").strip().lower()
         if tts_provider == "aliyun":
-            return "Ethan"
+            return DEFAULT_VOICE_BY_BACKEND[ALIYUN_BACKEND]
     if normalized_backend in {OPENAI_COMPATIBLE_BACKEND, OPENAI_COMPATIBLE_CHAT_BACKEND, PLATFORM_AGENT_BACKEND, COMPOSED_BACKEND}:
         configured_voice = (getattr(config, "TTS_VOICE", None) or getattr(config, "OPENAI_COMPATIBLE_VOICE", None) or "").strip()
         return configured_voice or DEFAULT_VOICE_BY_BACKEND[normalized_backend]

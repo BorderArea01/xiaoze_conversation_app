@@ -12,6 +12,10 @@
   - Make typed monitor input explain that Aliyun realtime uses the robot microphone as its input path.
 - Updated Aliyun realtime session audio settings to use documented `pcm16` input, `pcm24` output, and explicit input transcription enablement so robot microphone speech can trigger ASR events.
 - Lowered Aliyun realtime server VAD sensitivity from `0.5` to `0.2` and restored the documented 800 ms silence window so normal robot-side speech is easier to detect.
+- Changed the default robot identity from Reachy Mini to 小泽 while keeping Reachy Mini as the hardware platform description.
+- Changed the default Aliyun realtime voice from `Ethan` to `Cherry`.
+- Removed the remaining hard-coded Aliyun `Ethan` fallback so realtime and split TTS defaults both honor the shared Aliyun voice default.
+- Made `/status` report the active handler voice instead of only the backend default voice.
 - Changed the default Reachy Mini prompt to use Simplified Chinese by default instead of English.
 - Appended Chinese-first language rules at the shared prompt loader so custom profiles also default to Chinese.
 - Forced realtime typed turns and tool-result replies to request concise Chinese speech responses.
