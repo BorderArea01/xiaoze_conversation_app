@@ -12,6 +12,10 @@ logger = logging.getLogger(__name__)
 PROMPTS_LIBRARY_DIRECTORY = Path(__file__).parent / "prompts"
 INSTRUCTIONS_FILENAME = "instructions.txt"
 VOICE_FILENAME = "voice.txt"
+CHINESE_DEFAULT_RULES = (
+    "语言规则：默认使用简体中文和用户交流，并优先把用户语音理解为普通话中文。"
+    "只有在用户明确要求其他语言时才切换语言。"
+)
 
 
 def _expand_prompt_includes(content: str) -> str:
@@ -58,6 +62,12 @@ def _expand_prompt_includes(content: str) -> str:
     return "\n".join(expanded_lines)
 
 
+def _with_chinese_default(instructions: str) -> str:
+    if CHINESE_DEFAULT_RULES in instructions:
+        return instructions
+    return f"{instructions.strip()}\n\n{CHINESE_DEFAULT_RULES}"
+
+
 def get_session_instructions() -> str:
     """Get session instructions, loading from REACHY_MINI_CUSTOM_PROFILE if set."""
     profile = config.REACHY_MINI_CUSTOM_PROFILE
@@ -81,7 +91,7 @@ def get_session_instructions() -> str:
             if instructions:
                 # Expand [<name>] placeholders with content from prompts library
                 expanded_instructions = _expand_prompt_includes(instructions)
-                return expanded_instructions
+                return _with_chinese_default(expanded_instructions)
             logger.error(f"Profile '{profile}' has empty {INSTRUCTIONS_FILENAME}")
             sys.exit(1)
         logger.error(f"Profile {profile} has no {INSTRUCTIONS_FILENAME}")

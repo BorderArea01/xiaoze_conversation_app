@@ -641,7 +641,7 @@ class BaseRealtimeHandler(ConversationHandler, ABC):
             if not bg_tool.is_idle_tool_call:
                 await self._safe_response_create(
                     response=RealtimeResponseCreateParamsParam(
-                        instructions="Use the tool result just returned and answer concisely in speech.",
+                        instructions="请基于刚返回的工具结果，用简体中文简短语音回复。",
                     ),
                 )
 
@@ -1053,6 +1053,6 @@ class BaseRealtimeHandler(ConversationHandler, ABC):
             },
         )
         await self._safe_response_create(
-            response=RealtimeResponseCreateParamsParam(instructions="Answer concisely in speech.")
+            response=RealtimeResponseCreateParamsParam(instructions="请用简体中文简短回答，并用中文语音回复。")
         )
         return "已发送到实时语音模型。"

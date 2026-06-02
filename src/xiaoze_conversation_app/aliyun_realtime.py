@@ -243,7 +243,11 @@ class AliyunRealtimeHandler(BaseRealtimeHandler):
         return
 
     def _get_session_instructions(self) -> str:
-        return get_session_instructions()
+        return (
+            f"{get_session_instructions()}\n\n"
+            "语言规则：默认用简体中文交流。除非用户明确要求其他语言，"
+            "所有文本回复和语音回复都必须使用中文。"
+        )
 
     def _get_session_voice(self, default: str | None = None) -> str:
         return get_session_voice(default=default or self.VOICE)
@@ -309,5 +313,5 @@ class AliyunRealtimeHandler(BaseRealtimeHandler):
                 "content": [{"type": "input_text", "text": clean_text}],
             },
         )
-        await self._safe_response_create(response={"instructions": "Answer concisely in speech."})
+        await self._safe_response_create(response={"instructions": "请用简体中文简短回答，并用中文语音回复。"})
         return "已发送到阿里云实时语音模型。"

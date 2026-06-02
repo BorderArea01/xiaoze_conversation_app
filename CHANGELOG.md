@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-06-03
+
+### Fixed
+
+- Changed the default Reachy Mini prompt to use Simplified Chinese by default instead of English.
+- Appended Chinese-first language rules at the shared prompt loader so custom profiles also default to Chinese.
+- Forced realtime typed turns and tool-result replies to request concise Chinese speech responses.
+- Added Chinese-first session instructions for Hugging Face realtime and Aliyun realtime backends.
+- Set OpenAI-compatible realtime transcription to use the configured ASR language, defaulting to `zh`.
+- Strengthened the Hugging Face realtime ASR prompt so robot microphone input is treated as Mandarin Chinese and less likely to be mistranscribed as short English phrases.
+
 ## 2026-06-02
 
 ### Added

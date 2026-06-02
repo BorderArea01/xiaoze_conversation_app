@@ -46,7 +46,7 @@ class OpenAICompatibleRealtimeHandler(OpenaiRealtimeHandler):
                     format=AudioPCM(type="audio/pcm", rate=24000),
                     transcription=AudioTranscriptionParam(
                         model=config.OPENAI_COMPATIBLE_TRANSCRIPTION_MODEL,
-                        language="en",
+                        language=config.OPENAI_COMPATIBLE_ASR_LANGUAGE or "zh",
                     ),
                     turn_detection=ServerVad(type="server_vad", interrupt_response=True),
                 ),

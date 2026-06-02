@@ -76,7 +76,11 @@ class HuggingFaceRealtimeHandler(BaseRealtimeHandler):
 
     def _get_session_instructions(self) -> str:
         """Return Hugging Face session instructions."""
-        return get_session_instructions()
+        return (
+            f"{get_session_instructions()}\n\n"
+            "语言规则：默认用简体中文交流，并优先把用户语音理解为普通话中文。"
+            "除非用户明确要求其他语言，所有文本回复和语音回复都必须使用中文。"
+        )
 
     def _get_session_voice(self, default: str | None = None) -> str:
         """Return the configured Hugging Face session voice."""
@@ -100,9 +104,9 @@ class HuggingFaceRealtimeHandler(BaseRealtimeHandler):
                         model=config.OPENAI_COMPATIBLE_TRANSCRIPTION_MODEL or "gpt-4o-mini-transcribe",
                         language=config.OPENAI_COMPATIBLE_ASR_LANGUAGE or "zh",
                         prompt=(
-                            "这段音频主要是普通话中文，可能包含小泽机器人、Reachy Mini、访客登记、会议查询、"
-                            "跳舞、动作控制等词。请优先按中文转写，不要把中文语音误写成 Yeah、Okay、"
-                            "Chow、Well 等英文短词。"
+                            "这段音频主要是普通话中文，可能包含小泽机器人、Reachy Mini、访客登记、"
+                            "会议查询、跳舞、动作控制等词。请优先按中文转写，保留中文语义，"
+                            "不要把中文语音误写成 Yeah、Okay、Chow、Well 等英文短语。"
                         ),
                     ),
                     turn_detection=ServerVad(type="server_vad", interrupt_response=True),
