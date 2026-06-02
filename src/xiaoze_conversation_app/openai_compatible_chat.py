@@ -245,6 +245,20 @@ class OpenAICompatibleChatHandler(ConversationHandler):
         sample_rate, tts_audio = await self._speak(reply)
         await self.output_queue.put((sample_rate, tts_audio))
 
+    async def handle_text_turn(self, text: str) -> str:
+        """Run one typed chat turn and enqueue the reply for robot speaker playback."""
+        clean_text = text.strip()
+        if not clean_text:
+            return ""
+        await self.output_queue.put(AdditionalOutputs({"role": "user", "content": clean_text}))
+        reply = await self._chat(clean_text)
+        if not reply:
+            return ""
+        await self.output_queue.put(AdditionalOutputs({"role": "assistant", "content": reply}))
+        sample_rate, tts_audio = await self._speak(reply)
+        await self.output_queue.put((sample_rate, tts_audio))
+        return reply
+
     async def _transcribe(self, audio: NDArray[np.int16]) -> str:
         kwargs: dict[str, Any] = {
             "file": ("speech.wav", _wav_bytes(self.INPUT_SAMPLE_RATE, audio), "audio/wav"),

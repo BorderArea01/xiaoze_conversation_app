@@ -328,8 +328,20 @@ def run(
         else:
             app = settings_app
 
+        from pydantic import BaseModel
         from xiaoze_conversation_app.platform_chat import mount_platform_chat_routes
         mount_platform_chat_routes(app)
+
+        _spa_local_stream = LocalStream(
+            handler,
+            robot,
+            settings_app=app,
+            instance_path=instance_path,
+        )
+
+        class RobotChatPayload(BaseModel):
+            query: str
+            timeout_s: float = 30.0
 
         @app.get("/status")
         def _status() -> JSONResponse:
@@ -382,11 +394,42 @@ def run(
                     "session_id": current_platform.session_id,
                     "terminal_ws_url": current_platform.terminal_ws_url,
                 },
+                "robot_conversation": _spa_local_stream.get_monitor_state(),
             })
 
         @app.get("/ready")
         def _ready() -> JSONResponse:
             return JSONResponse({"ready": True})
+
+        @app.get("/conversation/status")
+        def _conversation_status() -> JSONResponse:
+            return JSONResponse(_spa_local_stream.get_monitor_state())
+
+        @app.get("/conversation/messages")
+        def _conversation_messages() -> JSONResponse:
+            state = _spa_local_stream.get_monitor_state()
+            return JSONResponse({"messages": state["messages"]})
+
+        @app.post("/conversation/text")
+        def _conversation_text(payload: RobotChatPayload) -> JSONResponse:
+            query = payload.query.strip()
+            if not query:
+                return JSONResponse({"ok": False, "error": "empty_query"}, status_code=400)
+            try:
+                reply = _spa_local_stream.submit_text_turn_threadsafe(query, timeout_s=max(1.0, payload.timeout_s))
+                return JSONResponse({"ok": True, "query": query, "text": reply})
+            except Exception as e:
+                logger.exception("Typed robot chat failed: %s", e)
+                error_text = f"对话失败：{type(e).__name__}: {e}"
+                _spa_local_stream.record_monitor_message(
+                    "assistant",
+                    error_text,
+                    {"status": "error"},
+                )
+                return JSONResponse(
+                    {"ok": False, "error": error_text},
+                    status_code=500,
+                )
 
         # Mount WebRTC stream without Gradio UI
         stream = Stream(
@@ -410,12 +453,6 @@ def run(
 
         # Register backend_config, validate_api_key routes via minimal LocalStream
         try:
-            _spa_local_stream = LocalStream(
-                handler,
-                robot,
-                settings_app=app,
-                instance_path=instance_path,
-            )
             _spa_local_stream._init_settings_ui_if_needed()
         except Exception as e:
             logger.warning("Failed to mount settings UI routes: %s", e)
@@ -434,7 +471,7 @@ def run(
 
             @app.get("/{full_path:path}")
             async def _spa_fallback(full_path: str) -> FileResponse:
-                if full_path.startswith(("api/", "webrtc/", "status", "platform_chat", "backend_config", "validate_api_key", "personalities", "voices", "ready", "openai_api_key")):
+                if full_path.startswith(("api/", "webrtc/", "status", "platform_chat", "conversation", "backend_config", "validate_api_key", "personalities", "voices", "ready", "openai_api_key")):
                     raise HTTPException(status_code=404)
                 if (static_dir / "index.html").exists():
                     return FileResponse(str(static_dir / "index.html"))
@@ -529,8 +566,8 @@ def run(
         shutdown_event.set()
         try:
             if use_spa:
-                # SPA mode: FastAPI doesn't have close(), uvicorn handles shutdown
-                pass
+                if _spa_local_stream is not None:
+                    _spa_local_stream.close()
             else:
                 stream_manager.close()
         except Exception as e:
@@ -548,6 +585,12 @@ def run(
 
     try:
         if use_spa:
+            spa_stream_thread = threading.Thread(
+                target=_spa_local_stream.launch,
+                name="xiaoze-spa-local-audio-stream",
+                daemon=True,
+            )
+            spa_stream_thread.start()
             import uvicorn
             uvicorn_cfg = uvicorn.Config(app, host="0.0.0.0", port=7860, log_level="info")
             server = uvicorn.Server(uvicorn_cfg)

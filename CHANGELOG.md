@@ -9,6 +9,10 @@
 
 ### Fixed
 
+- Started the robot-side local audio loop in SPA mode so the Raspberry Pi microphone and speaker handle conversation instead of the browser microphone.
+- Added `/conversation/status`, `/conversation/messages`, and `/conversation/text` for monitoring robot-side audio levels, chat history, and typed turns.
+- Changed the main voice UI into a robot conversation monitor with robot microphone/speaker levels and local handler text input.
+- Recorded backend conversation errors in the monitor chat history so failed turns no longer look like silent UI failures.
 - Streamlined the xiaoze settings UI so credentials no longer appear as two large always-visible panels.
 - Added compact provider tabs and credential fields that only appear for the providers currently in use.
 - Changed the microphone visualizer to read the local microphone signal, so speaking into the mic now drives the audio level animation.
@@ -40,3 +44,9 @@
   - `http://127.0.0.1:7860/ready` returns ready.
   - `http://127.0.0.1:7860/status` reports composed Aliyun config with `TTS_VOICE=Ethan`.
   - Saving the current Aliyun backend config without re-entering the key returns `requires_restart=false` and keeps `has_aliyun_key=true`.
+  - `http://127.0.0.1:7860/conversation/status` reports `running=true` with live robot microphone input level.
+  - `http://127.0.0.1:7860/conversation/text` reaches the local handler and records errors in the monitor history.
+
+### Known Remaining Issue
+
+- The currently configured Aliyun key reaches the LLM provider but returns `Model.AccessDenied` for tested Qwen chat models, including `qwen-plus`, so ASR -> LLM -> TTS cannot complete until an authorized chat model/key is configured.

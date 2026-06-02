@@ -15,9 +15,10 @@ import sys
 import time
 import asyncio
 import logging
-from typing import List, Optional
+from typing import Any, List, Optional
 from pathlib import Path
 
+import numpy as np
 from fastrtc import AdditionalOutputs, audio_to_float32
 from scipy.signal import resample
 
@@ -133,6 +134,68 @@ class LocalStream:
         self._settings_initialized = False
         self._asyncio_loop = None
         self._active_backend_name = get_backend_choice()
+        self._running = False
+        self._input_level = 0.0
+        self._output_level = 0.0
+        self._monitor_messages: list[dict[str, Any]] = []
+
+    @staticmethod
+    def _pcm_level(audio_data: Any) -> float:
+        """Return a normalized RMS level for int16 or float audio frames."""
+        try:
+            arr = np.asarray(audio_data)
+            if arr.size == 0:
+                return 0.0
+            arr = arr.astype(np.float32)
+            peak = 32768.0 if np.nanmax(np.abs(arr)) > 2.0 else 1.0
+            rms = float(np.sqrt(np.mean((arr / peak) ** 2)))
+            return max(0.0, min(1.0, rms * 4.0))
+        except Exception:
+            return 0.0
+
+    def _record_monitor_message(self, role: str, content: str, metadata: dict[str, Any] | None = None) -> None:
+        clean_content = content.strip()
+        if not clean_content:
+            return
+        self._monitor_messages.append(
+            {
+                "role": role,
+                "content": clean_content,
+                "timestamp": time.time(),
+                "metadata": metadata or {},
+            }
+        )
+        self._monitor_messages = self._monitor_messages[-80:]
+
+    def record_monitor_message(self, role: str, content: str, metadata: dict[str, Any] | None = None) -> None:
+        """Append a monitor message from routes outside the audio loop."""
+        self._record_monitor_message(role, content, metadata)
+
+    def get_monitor_state(self) -> dict[str, Any]:
+        """Return state for the SPA monitor."""
+        return {
+            "running": self._running,
+            "input_level": self._input_level,
+            "output_level": self._output_level,
+            "messages": list(self._monitor_messages),
+        }
+
+    async def submit_text_turn(self, text: str) -> str:
+        """Submit typed text to the active local chat handler."""
+        handle_text_turn = getattr(self.handler, "handle_text_turn", None)
+        if not callable(handle_text_turn):
+            raise RuntimeError("The active backend does not support typed local chat turns.")
+        result = handle_text_turn(text)
+        if asyncio.iscoroutine(result):
+            return str(await result)
+        return str(result or "")
+
+    def submit_text_turn_threadsafe(self, text: str, timeout_s: float = 30.0) -> str:
+        """Submit typed text from a FastAPI request running outside the audio loop."""
+        if self._asyncio_loop is None:
+            raise RuntimeError("Robot conversation loop is not ready.")
+        future = asyncio.run_coroutine_threadsafe(self.submit_text_turn(text), self._asyncio_loop)
+        return future.result(timeout=timeout_s)
 
     # ---- Settings UI ----
     def _read_env_lines(self, env_path: Path) -> list[str]:
@@ -766,6 +829,7 @@ class LocalStream:
         # Start media after key is set/available
         self._robot.media.start_recording()
         self._robot.media.start_playing()
+        self._running = True
         time.sleep(1)  # give some time to the pipelines to start
         apply_audio_startup_config(self._robot, logger=logger)
 
@@ -821,6 +885,7 @@ class LocalStream:
             self._robot.media.stop_playing()
         except Exception as e:
             logger.debug(f"Error stopping playback (may already be stopped): {e}")
+        self._running = False
 
         # Now signal async loops to stop
         self._stop_event.set()
@@ -863,6 +928,7 @@ class LocalStream:
         while not self._stop_event.is_set():
             audio_frame = self._robot.media.get_audio_sample()
             if audio_frame is not None:
+                self._input_level = self._pcm_level(audio_frame)
                 await self.handler.receive((input_sample_rate, audio_frame))
             await asyncio.sleep(0)  # avoid busy loop
 
@@ -875,6 +941,7 @@ class LocalStream:
                 for msg in handler_output.args:
                     content = msg.get("content", "")
                     if isinstance(content, str):
+                        self._record_monitor_message(str(msg.get("role") or "assistant"), content, msg.get("metadata"))
                         logger.info(
                             "role=%s content=%s",
                             msg.get("role"),
@@ -888,6 +955,7 @@ class LocalStream:
                 # Skip empty audio frames
                 if audio_data.size == 0:
                     continue
+                self._output_level = self._pcm_level(audio_data)
 
                 # Reshape if needed
                 if audio_data.ndim == 2:
