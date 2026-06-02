@@ -135,6 +135,7 @@ class LocalStream:
         self._asyncio_loop = None
         self._active_backend_name = get_backend_choice()
         self._running = False
+        self._last_error = ""
         self._input_level = 0.0
         self._output_level = 0.0
         self._monitor_messages: list[dict[str, Any]] = []
@@ -175,6 +176,7 @@ class LocalStream:
         """Return state for the SPA monitor."""
         return {
             "running": self._running,
+            "error": self._last_error,
             "input_level": self._input_level,
             "output_level": self._output_level,
             "messages": list(self._monitor_messages),
@@ -194,6 +196,10 @@ class LocalStream:
         """Submit typed text from a FastAPI request running outside the audio loop."""
         if self._asyncio_loop is None:
             raise RuntimeError("Robot conversation loop is not ready.")
+        if self._asyncio_loop.is_closed():
+            self._asyncio_loop = None
+            self._running = False
+            raise RuntimeError("Robot conversation loop has stopped.")
         future = asyncio.run_coroutine_threadsafe(self.submit_text_turn(text), self._asyncio_loop)
         return future.result(timeout=timeout_s)
 
@@ -402,6 +408,11 @@ class LocalStream:
             self._remove_persisted_env_values(("MODEL_NAME",))
             refresh_runtime_config_from_env()
             return
+        if backend == ALIYUN_BACKEND:
+            updates["MODEL_NAME"] = current_model_name or get_model_name_for_backend(backend)
+            self._persist_env_values(updates)
+            refresh_runtime_config_from_env()
+            return
 
         if current_model_name and current_model_name != get_model_name_for_backend(current_backend):
             updates["MODEL_NAME"] = current_model_name
@@ -465,6 +476,7 @@ class LocalStream:
 
         class BackendPayload(BaseModel):
             backend: str
+            model_name: Optional[str] = None
             api_key: Optional[str] = None
             aliyun_api_key: Optional[str] = None
             hf_mode: Optional[str] = None
@@ -546,6 +558,10 @@ class LocalStream:
                 "can_proceed_with_aliyun": can_proceed_with_aliyun,
                 "has_aliyun_key": has_aliyun_key,
                 "requires_restart": requires_restart,
+                "realtime": {
+                    "provider": backend_provider,
+                    "model": config.MODEL_NAME,
+                },
                 "platform": {
                     "token_configured": bool(os.getenv("REACHY_PLATFORM_TOKEN")),
                     "enabled": os.getenv("REACHY_PLATFORM_ENABLED", "0").strip() in {"1", "true", "True", "yes"},
@@ -635,6 +651,8 @@ class LocalStream:
                     return JSONResponse({"ok": False, "error": "empty_key"}, status_code=400)
                 if aliyun_key:
                     self._persist_aliyun_api_key(aliyun_key)
+                model_name = (payload.model_name or "").strip() or get_model_name_for_backend(ALIYUN_BACKEND)
+                self._persist_env_values({"MODEL_NAME": model_name})
             if backend == PLATFORM_AGENT_BACKEND:
                 platform_updates = {
                     "REACHY_PLATFORM_TOKEN": platform_token,
@@ -858,7 +876,13 @@ class LocalStream:
                 await asyncio.gather(*self._tasks)
             except asyncio.CancelledError:
                 logger.info("Tasks cancelled during shutdown")
+            except Exception as e:
+                self._last_error = f"{type(e).__name__}: {e}"
+                logger.exception("LocalStream runner failed: %s", e)
+                raise
             finally:
+                self._running = False
+                self._asyncio_loop = None
                 # Ensure handler connection is closed
                 await self.handler.shutdown()
 

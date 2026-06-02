@@ -64,6 +64,7 @@ def run(
     from xiaoze_conversation_app.moves import MovementManager
     from xiaoze_conversation_app.config import (
         HF_BACKEND,
+        ALIYUN_BACKEND,
         GEMINI_BACKEND,
         OPENAI_BACKEND,
         PLATFORM_AGENT_BACKEND,
@@ -227,6 +228,16 @@ def run(
             instance_path=instance_path,
             startup_voice=startup_settings.voice,
         )
+    elif config.BACKEND_PROVIDER == ALIYUN_BACKEND:
+        from xiaoze_conversation_app.aliyun_realtime import AliyunRealtimeHandler
+
+        logger.info("Using %s via Aliyun realtime model", get_backend_label(config.BACKEND_PROVIDER))
+        handler = AliyunRealtimeHandler(
+            deps,
+            gradio_mode=args.gradio,
+            instance_path=instance_path,
+            startup_voice=startup_settings.voice,
+        )
     elif is_gemini_model():
         from xiaoze_conversation_app.gemini_live import GeminiLiveHandler
 
@@ -360,12 +371,15 @@ def run(
                 (os.getenv("TTS_PROVIDER") or "openai").strip().lower(),
             }
             can_proceed = True
-            if "aliyun" in component_providers and not aliyun_key.strip():
-                can_proceed = False
-            if "openai_compatible" in component_providers and not openai_compatible_key.strip():
-                can_proceed = False
-            if "openai" in component_providers and not openai_key.strip():
-                can_proceed = False
+            if config.BACKEND_PROVIDER == ALIYUN_BACKEND:
+                can_proceed = bool(aliyun_key.strip())
+            else:
+                if "aliyun" in component_providers and not aliyun_key.strip():
+                    can_proceed = False
+                if "openai_compatible" in component_providers and not openai_compatible_key.strip():
+                    can_proceed = False
+                if "openai" in component_providers and not openai_key.strip():
+                    can_proceed = False
             return JSONResponse({
                 "active_backend": config.BACKEND_PROVIDER,
                 "backend_provider": config.BACKEND_PROVIDER,
@@ -375,6 +389,10 @@ def run(
                 "can_proceed": can_proceed,
                 "current_voice": get_default_voice_for_backend(),
                 "available_voices": get_available_voices_for_backend(),
+                "realtime": {
+                    "provider": config.BACKEND_PROVIDER,
+                    "model": config.MODEL_NAME,
+                },
                 "composed": {
                     "asr_provider": os.getenv("ASR_PROVIDER", "openai"),
                     "asr_base_url": os.getenv("ASR_BASE_URL", ""),

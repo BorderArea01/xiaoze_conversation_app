@@ -9,6 +9,10 @@
 
 ### Fixed
 
+- Added an Aliyun realtime backend option for `qwen3.5-omni-flash-realtime`, `qwen3-omni-flash-realtime`, and `qwen-omni-turbo-realtime`.
+- Reworked the settings UI around two clearer modes: recommended Aliyun realtime voice and advanced split ASR / LLM / TTS.
+- Added realtime model persistence through `model_name` so backend switches write the intended model cleanly.
+- Improved robot conversation monitor state so stopped audio loops report `running=false` and expose the last loop error.
 - Started the robot-side local audio loop in SPA mode so the Raspberry Pi microphone and speaker handle conversation instead of the browser microphone.
 - Added `/conversation/status`, `/conversation/messages`, and `/conversation/text` for monitoring robot-side audio levels, chat history, and typed turns.
 - Changed the main voice UI into a robot conversation monitor with robot microphone/speaker levels and local handler text input.
@@ -50,3 +54,4 @@
 ### Known Remaining Issue
 
 - The currently configured Aliyun key reaches the LLM provider but returns `Model.AccessDenied` for tested Qwen chat models, including `qwen-plus`, so ASR -> LLM -> TTS cannot complete until an authorized chat model/key is configured.
+- `qwen3.6-plus` is available for LLM text generation with the current Aliyun key, but tested Aliyun realtime and TTS models still return `Model.AccessDenied` when an actual response is requested.

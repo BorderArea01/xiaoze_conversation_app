@@ -207,7 +207,13 @@ def _resolve_model_name(
             return candidate
         if (
             normalized_backend
-            in {OPENAI_BACKEND, OPENAI_COMPATIBLE_BACKEND, OPENAI_COMPATIBLE_CHAT_BACKEND, PLATFORM_AGENT_BACKEND}
+            in {
+                OPENAI_BACKEND,
+                OPENAI_COMPATIBLE_BACKEND,
+                OPENAI_COMPATIBLE_CHAT_BACKEND,
+                PLATFORM_AGENT_BACKEND,
+                ALIYUN_BACKEND,
+            }
             and not _is_gemini_model_name(candidate)
         ):
             return candidate
