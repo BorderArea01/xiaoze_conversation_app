@@ -359,6 +359,7 @@ def run(
                 "backend_provider": config.BACKEND_PROVIDER,
                 "has_key": can_proceed,
                 "has_aliyun_key": bool(aliyun_key.strip()),
+                "has_openai_compatible_key": bool(openai_compatible_key.strip()),
                 "can_proceed": can_proceed,
                 "current_voice": get_default_voice_for_backend(),
                 "available_voices": get_available_voices_for_backend(),
