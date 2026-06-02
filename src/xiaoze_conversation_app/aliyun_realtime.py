@@ -148,11 +148,12 @@ class _AliyunRealtimeConnection:
             "modalities": payload.get("modalities") or ["text", "audio"],
             "instructions": payload.get("instructions") or "",
             "voice": output_audio.get("voice") or payload.get("voice"),
-            "input_audio_format": payload.get("input_audio_format") or "pcm",
-            "output_audio_format": payload.get("output_audio_format") or "pcm",
+            "input_audio_format": payload.get("input_audio_format") or "pcm16",
+            "output_audio_format": payload.get("output_audio_format") or "pcm24",
         }
         if transcription is not None:
-            session_payload["input_audio_transcription"] = {"model": "qwen3-asr-flash-realtime"}
+            session_payload["enable_input_audio_transcription"] = True
+            session_payload["input_audio_transcription_model"] = "qwen3-asr-flash-realtime"
         if isinstance(turn_detection, dict) and turn_detection.get("type"):
             session_payload["turn_detection"] = {
                 key: value
@@ -291,9 +292,10 @@ class AliyunRealtimeHandler(BaseRealtimeHandler):
             "modalities": ["text", "audio"],
             "instructions": self._get_session_instructions(),
             "voice": self.get_current_voice(),
-            "input_audio_format": "pcm",
-            "output_audio_format": "pcm",
-            "input_audio_transcription": {"model": "qwen3-asr-flash-realtime"},
+            "input_audio_format": "pcm16",
+            "output_audio_format": "pcm24",
+            "enable_input_audio_transcription": True,
+            "input_audio_transcription_model": "qwen3-asr-flash-realtime",
             "turn_detection": {
                 "type": "server_vad",
                 "threshold": 0.5,
@@ -310,8 +312,8 @@ class AliyunRealtimeHandler(BaseRealtimeHandler):
             "modalities": ["text", "audio"],
             "instructions": instructions,
             "voice": voice,
-            "input_audio_format": "pcm",
-            "output_audio_format": "pcm",
+            "input_audio_format": "pcm16",
+            "output_audio_format": "pcm24",
         }
 
     async def _build_realtime_client(self) -> _AliyunRealtimeClient:

@@ -10,6 +10,7 @@
   - Normalize Aliyun partial ASR `text`/`stash` events into monitor-friendly transcript deltas.
   - Omit tools for Qwen-Omni realtime models that do not support Function Calling.
   - Make typed monitor input explain that Aliyun realtime uses the robot microphone as its input path.
+- Updated Aliyun realtime session audio settings to use documented `pcm16` input, `pcm24` output, and explicit input transcription enablement so robot microphone speech can trigger ASR events.
 - Changed the default Reachy Mini prompt to use Simplified Chinese by default instead of English.
 - Appended Chinese-first language rules at the shared prompt loader so custom profiles also default to Chinese.
 - Forced realtime typed turns and tool-result replies to request concise Chinese speech responses.
