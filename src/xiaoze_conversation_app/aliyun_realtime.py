@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import io
 import inspect
 import json
@@ -9,16 +10,16 @@ import uuid
 import wave
 from types import SimpleNamespace
 from typing import Any
+from urllib import request as urlrequest
 from urllib.parse import urlencode
 
 import numpy as np
 import websockets
 
 from fastrtc import AdditionalOutputs
-from openai import AsyncOpenAI
 
 from xiaoze_conversation_app.base_realtime import BaseRealtimeHandler
-from xiaoze_conversation_app.config import ALIYUN_BACKEND, ALIYUN_BASE_URL, config, get_default_voice_for_backend
+from xiaoze_conversation_app.config import ALIYUN_BACKEND, config, get_default_voice_for_backend
 from xiaoze_conversation_app.prompts import get_session_instructions, get_session_voice
 from xiaoze_conversation_app.tools.core_tools import ToolDependencies, get_active_tool_specs
 
@@ -26,6 +27,7 @@ from xiaoze_conversation_app.tools.core_tools import ToolDependencies, get_activ
 logger = logging.getLogger(__name__)
 
 ALIYUN_REALTIME_BASE_URL = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+ALIYUN_TTS_GENERATION_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
 
 _EVENT_TYPE_MAP = {
     "response.audio.delta": "response.output_audio.delta",
@@ -97,6 +99,38 @@ def _decode_tts_audio(data: bytes, response_format: str, sample_rate: int) -> tu
     if normalized_format != "pcm":
         raise ValueError("Aliyun voice preview TTS response format must be 'pcm' or 'wav'")
     return sample_rate, np.frombuffer(data, dtype=np.int16)
+
+
+def _dashscope_tts_request(api_key: str, model: str, voice: str, text: str) -> tuple[int, np.ndarray]:
+    payload = {
+        "model": model,
+        "input": {
+            "text": text,
+            "voice": voice,
+        },
+    }
+    request_data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = urlrequest.Request(
+        ALIYUN_TTS_GENERATION_URL,
+        data=request_data,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urlrequest.urlopen(req, timeout=30) as response:
+        response_body = response.read().decode("utf-8", errors="replace")
+    result = json.loads(response_body)
+    audio = result.get("output", {}).get("audio") if isinstance(result, dict) else None
+    audio_url = audio.get("url") if isinstance(audio, dict) else None
+    if not audio_url:
+        message = result.get("message") if isinstance(result, dict) else response_body
+        raise RuntimeError(f"Aliyun TTS did not return an audio URL: {message}")
+
+    with urlrequest.urlopen(audio_url, timeout=30) as audio_response:
+        audio_data = audio_response.read()
+    return _decode_tts_audio(audio_data, "wav", 24000)
 
 
 class _AliyunSessionAPI:
@@ -291,9 +325,6 @@ class AliyunRealtimeHandler(BaseRealtimeHandler):
         if not api_key:
             raise RuntimeError("ALIYUN_API_KEY or DASHSCOPE_API_KEY is required for voice preview.")
 
-        client = AsyncOpenAI(api_key=api_key, base_url=ALIYUN_BASE_URL)
-        response_format = (config.TTS_RESPONSE_FORMAT or "pcm").strip().lower()
-        sample_rate = int(config.TTS_SAMPLE_RATE or self.OUTPUT_SAMPLE_RATE)
         configured_model = (config.TTS_MODEL or "").strip()
         model_candidates = []
         for candidate in (configured_model, "qwen3-tts-flash", "qwen3-tts"):
@@ -301,37 +332,33 @@ class AliyunRealtimeHandler(BaseRealtimeHandler):
                 model_candidates.append(candidate)
 
         last_error: Exception | None = None
-        try:
-            for model in model_candidates:
-                try:
-                    response = await client.audio.speech.create(
-                        model=model,
-                        voice=self.get_current_voice(),
-                        input=clean_text,
-                        response_format=response_format,
+        for model in model_candidates:
+            try:
+                rate, audio = await asyncio.to_thread(
+                    _dashscope_tts_request,
+                    api_key,
+                    model,
+                    self.get_current_voice(),
+                    clean_text,
+                )
+                if audio.size == 0:
+                    raise RuntimeError("Aliyun voice preview TTS returned empty audio.")
+                await self.output_queue.put((rate, audio.reshape(1, -1)))
+                await self.output_queue.put(
+                    AdditionalOutputs(
+                        {
+                            "role": "assistant",
+                            "content": clean_text,
+                            "metadata": {"status": "voice_preview", "voice": self.get_current_voice()},
+                        }
                     )
-                    data = await response.aread() if hasattr(response, "aread") else response.read()
-                    rate, audio = _decode_tts_audio(data, response_format, sample_rate)
-                    if audio.size == 0:
-                        raise RuntimeError("Aliyun voice preview TTS returned empty audio.")
-                    await self.output_queue.put((rate, audio.reshape(1, -1)))
-                    await self.output_queue.put(
-                        AdditionalOutputs(
-                            {
-                                "role": "assistant",
-                                "content": clean_text,
-                                "metadata": {"status": "voice_preview", "voice": self.get_current_voice()},
-                            }
-                        )
-                    )
-                    logger.info("Queued Aliyun voice preview using model=%s voice=%s", model, self.get_current_voice())
-                    return clean_text
-                except Exception as exc:
-                    last_error = exc
-                    logger.warning("Aliyun voice preview failed with model=%s: %s", model, exc)
-            raise RuntimeError(f"Aliyun voice preview failed: {last_error}")
-        finally:
-            await client.close()
+                )
+                logger.info("Queued Aliyun voice preview using model=%s voice=%s", model, self.get_current_voice())
+                return clean_text
+            except Exception as exc:
+                last_error = exc
+                logger.warning("Aliyun voice preview failed with model=%s: %s", model, exc)
+        raise RuntimeError(f"Aliyun voice preview failed: {last_error}")
 
     def _get_session_instructions(self) -> str:
         return (
