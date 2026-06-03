@@ -115,17 +115,18 @@ class BaseRealtimeHandler(ConversationHandler, ABC):
         startup_voice: Optional[str] = None,
     ):
         """Initialize the handler."""
-        sample_rate = self.SAMPLE_RATE
+        input_sample_rate = int(getattr(self, "INPUT_SAMPLE_RATE", self.SAMPLE_RATE))
+        output_sample_rate = int(getattr(self, "OUTPUT_SAMPLE_RATE", self.SAMPLE_RATE))
         super().__init__(
             expected_layout="mono",
-            output_sample_rate=sample_rate,
-            input_sample_rate=sample_rate,
+            output_sample_rate=output_sample_rate,
+            input_sample_rate=input_sample_rate,
         )
 
         self.deps = deps
 
-        self.output_sample_rate = sample_rate
-        self.input_sample_rate = sample_rate
+        self.output_sample_rate = output_sample_rate
+        self.input_sample_rate = input_sample_rate
 
         self.client: AsyncOpenAI
         self.connection: AsyncRealtimeConnection | None = None
