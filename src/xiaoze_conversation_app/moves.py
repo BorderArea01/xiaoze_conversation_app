@@ -746,43 +746,26 @@ class MovementManager:
         logger.debug("Move worker started")
 
     def stop(self) -> None:
-        """Request the worker thread to stop and wait for it to exit.
+        """Request the worker thread to stop without commanding a reset pose.
 
-        Before stopping, resets the robot to a neutral position.
+        Startup/shutdown must not move the robot back to neutral: the robot may
+        be inside a custom shell, and a large implicit reset can damage it.
         """
         if self._thread is None or not self._thread.is_alive():
             logger.debug("Move worker not running; stop() ignored")
             return
 
-        logger.info("Stopping movement manager and resetting to neutral position...")
+        logger.info("Stopping movement manager without commanding a reset pose...")
 
-        # Clear any queued moves and stop current move
+        # Clear any queued moves and stop current move.
         self.clear_move_queue()
 
-        # Stop the worker thread first so it doesn't interfere
+        # Stop the worker thread so no further set_target commands are emitted.
         self._stop_event.set()
         if self._thread is not None:
             self._thread.join()
             self._thread = None
         logger.debug("Move worker stopped")
-
-        # Reset to neutral position using goto_target (same approach as wake_up)
-        try:
-            neutral_head_pose = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
-            neutral_antennas = [-0.1745, 0.1745]  # ~10° offset to reduce shaking
-
-            # Use goto_target directly on the robot (don't rotate body)
-            self.current_robot.goto_target(
-                head=neutral_head_pose,
-                antennas=neutral_antennas,
-                duration=2.0,
-                body_yaw=None,  # Don't rotate body on shutdown
-            )
-
-            logger.info("Reset to neutral position completed")
-
-        except Exception as e:
-            logger.error(f"Failed to reset to neutral position: {e}")
 
     def get_status(self) -> Dict[str, Any]:
         """Return a lightweight status snapshot for observability."""
