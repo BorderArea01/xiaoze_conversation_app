@@ -278,6 +278,28 @@ class BaseRealtimeHandler(ConversationHandler, ABC):
                 return "Voice change failed. Will take effect on next connection."
         return "Voice changed. Will take effect on next connection."
 
+    async def speak_text(self, text: str) -> str:
+        """Ask the realtime session to speak a short fixed phrase."""
+        clean_text = text.strip()
+        if not clean_text:
+            return ""
+        if not self.connection:
+            raise RuntimeError("Realtime connection is not ready.")
+        prompt = f"请只说这句话：{clean_text}。不要添加任何其他内容。"
+        await self.connection.conversation.item.create(
+            item={
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": prompt}],
+            },
+        )
+        await self._safe_response_create(
+            response=RealtimeResponseCreateParamsParam(
+                instructions=f"只用中文语音说：{clean_text}。不要解释，不要添加其他词。"
+            )
+        )
+        return clean_text
+
     def get_current_voice(self) -> str:
         """Return the voice currently selected for this handler."""
         default_voice = get_default_voice_for_backend(self.BACKEND_PROVIDER)

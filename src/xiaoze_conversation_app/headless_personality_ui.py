@@ -106,6 +106,17 @@ def mount_personality_routes(
             return await asyncio.wrap_future(future)
         return await coro
 
+    async def _play_voice_preview() -> bool:
+        speak_text = getattr(handler, "speak_text", None)
+        if not callable(speak_text):
+            return False
+        try:
+            await _run_handler_action(speak_text("你好吗"))
+            return True
+        except Exception as e:
+            logger.warning("Failed to play voice preview: %s", e)
+            return False
+
     @app.get("/personalities")
     def _list() -> dict:  # type: ignore
         choices = _choices()
@@ -297,6 +308,7 @@ def mount_personality_routes(
                 "startup": persisted_choice,
                 "current": _current_choice(),
                 "current_voice": current_voice or get_default_voice_for_backend(),
+                "preview_spoken": await _play_voice_preview(),
                 "requires_restart": False,
             }
         except Exception as e:
@@ -339,6 +351,7 @@ def mount_personality_routes(
                 "ok": True,
                 "status": f"已切换音色「{current_voice}」。{status}",
                 "voice": current_voice,
+                "preview_spoken": await _play_voice_preview(),
                 "requires_restart": False,
             }
         except Exception as e:
