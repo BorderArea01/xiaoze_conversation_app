@@ -18,6 +18,10 @@
 - Made `/status` report the active handler voice instead of only the backend default voice.
 - Fixed personality saves with Chinese names by allowing Unicode profile names and falling back to `自定义个性` for blank names.
 - Made `/voices` and `/voices/current` return immediately from backend metadata so the voice settings tab no longer appears blank while realtime is busy.
+- Added three built-in Chinese presets for 展厅机器人, 会议机器人, and 秘书机器人.
+- Made voice changes return immediately and persist the selected voice while the realtime session restarts in the background.
+- Fixed voice persistence when the current personality is the built-in default profile.
+- Wired the SPA route mount to startup personality persistence so voice choices survive app restarts.
 - Changed the default Reachy Mini prompt to use Simplified Chinese by default instead of English.
 - Appended Chinese-first language rules at the shared prompt loader so custom profiles also default to Chinese.
 - Forced realtime typed turns and tool-result replies to request concise Chinese speech responses.

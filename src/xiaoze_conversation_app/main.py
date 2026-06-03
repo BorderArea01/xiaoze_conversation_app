@@ -81,6 +81,8 @@ def run(
     from xiaoze_conversation_app.startup_settings import (
         StartupSettings,
         load_startup_settings_into_runtime,
+        read_startup_settings,
+        write_startup_settings,
     )
 
     logger = setup_logger(args.debug)
@@ -469,10 +471,27 @@ def run(
         # (catch-all /{path} would shadow routes registered after it)
         try:
             from xiaoze_conversation_app.headless_personality_ui import mount_personality_routes
+
+            def _persist_spa_personality(profile: str | None, voice_override: str | None = None) -> None:
+                if instance_path is None:
+                    return
+                try:
+                    from xiaoze_conversation_app.config import set_custom_profile
+
+                    set_custom_profile(profile)
+                except Exception:
+                    pass
+                write_startup_settings(instance_path, profile=profile, voice=voice_override)
+
+            def _read_spa_personality() -> str | None:
+                return read_startup_settings(instance_path).profile if instance_path is not None else None
+
             mount_personality_routes(
                 app,
                 handler,
                 lambda: asyncio.get_event_loop() if asyncio.get_event_loop().is_running() else None,
+                persist_personality=_persist_spa_personality,
+                get_persisted_personality=_read_spa_personality,
             )
         except Exception as e:
             logger.warning("Failed to mount personality routes: %s", e)

@@ -299,9 +299,11 @@ def mount_personality_routes(
             return await handler.change_voice(voice)
 
         try:
-            fut = asyncio.run_coroutine_threadsafe(_do(), loop)
-            status = fut.result(timeout=10)
-            return {"ok": True, "status": status}
+            if persist_personality is not None:
+                current_profile = _current_choice()
+                persist_personality(None if current_profile == DEFAULT_OPTION else current_profile, voice)
+            asyncio.run_coroutine_threadsafe(_do(), loop)
+            return {"ok": True, "status": f"正在切换音色到 {voice}"}
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)  # type: ignore
 
