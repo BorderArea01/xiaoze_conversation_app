@@ -61,8 +61,13 @@ CONTROL_LOOP_FREQUENCY_HZ = 60.0  # Hz - Target frequency for the movement contr
 FullBodyPose = Tuple[NDArray[np.float32], Tuple[float, float], float | None]  # (head_pose_4x4, antennas, body_yaw)
 
 
+def _antenna_pair(values: Tuple[float, float] | NDArray[np.float64] | list[float]) -> NDArray[np.float64]:
+    """Return a two-value antenna array."""
+    return np.array([float(values[0]), float(values[1])], dtype=np.float64)
+
+
 class BreathingMove(Move):  # type: ignore
-    """Breathing move with interpolation to neutral and then continuous breathing patterns."""
+    """Breathing move that stays around the current pose."""
 
     def __init__(
         self,
@@ -79,17 +84,16 @@ class BreathingMove(Move):  # type: ignore
 
         """
         self.interpolation_start_pose = interpolation_start_pose
-        self.interpolation_start_antennas = np.array(interpolation_start_antennas)
+        self.interpolation_start_antennas = _antenna_pair(interpolation_start_antennas)
         self.interpolation_duration = interpolation_duration
 
-        # Neutral positions for breathing base
-        self.neutral_head_pose = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
-        self.neutral_antennas = np.array([-0.1745, 0.1745])  # ~10° offset to reduce shaking
+        self.base_head_pose = interpolation_start_pose.copy()
+        self.base_antennas = _antenna_pair(interpolation_start_antennas)
 
         # Breathing parameters
-        self.breathing_z_amplitude = 0.005  # 5mm gentle breathing
+        self.breathing_z_amplitude = 0.005  # 5 mm gentle breathing
         self.breathing_frequency = 0.1  # Hz (6 breaths per minute)
-        self.antenna_sway_amplitude = np.deg2rad(15)  # 15 degrees
+        self.antenna_sway_amplitude = np.deg2rad(3)  # small shell-safe sway
         self.antenna_frequency = 0.5  # Hz (faster antenna sway)
 
     @property
@@ -100,36 +104,66 @@ class BreathingMove(Move):  # type: ignore
     def evaluate(self, t: float) -> tuple[NDArray[np.float64] | None, NDArray[np.float64] | None, float | None]:
         """Evaluate breathing move at time t."""
         if t < self.interpolation_duration:
-            # Phase 1: Interpolate to neutral base position
             interpolation_t = t / self.interpolation_duration
-
-            # Interpolate head pose
             head_pose = linear_pose_interpolation(
                 self.interpolation_start_pose,
-                self.neutral_head_pose,
+                self.base_head_pose,
                 interpolation_t,
             )
-
-            # Interpolate antennas
             antennas_interp = (
                 1 - interpolation_t
-            ) * self.interpolation_start_antennas + interpolation_t * self.neutral_antennas
+            ) * self.interpolation_start_antennas + interpolation_t * self.base_antennas
             antennas = antennas_interp.astype(np.float64)
 
         else:
-            # Phase 2: Breathing patterns from neutral base
             breathing_time = t - self.interpolation_duration
-
-            # Gentle z-axis breathing
             z_offset = self.breathing_z_amplitude * np.sin(2 * np.pi * self.breathing_frequency * breathing_time)
-            head_pose = create_head_pose(x=0, y=0, z=z_offset, roll=0, pitch=0, yaw=0, degrees=True, mm=False)
-
-            # Antenna sway (opposite directions)
+            offset_pose = create_head_pose(x=0, y=0, z=z_offset, roll=0, pitch=0, yaw=0, degrees=True, mm=False)
+            head_pose = compose_world_offset(self.base_head_pose, offset_pose, reorthonormalize=False)
             antenna_sway = self.antenna_sway_amplitude * np.sin(2 * np.pi * self.antenna_frequency * breathing_time)
-            antennas = np.array([antenna_sway, -antenna_sway], dtype=np.float64)
+            antennas = self.base_antennas + np.array([antenna_sway, -antenna_sway], dtype=np.float64)
 
         # Return in official Move interface format: (head_pose, antennas_array, body_yaw).
         # Breathing should not rotate the body; leave yaw uncontrolled.
+        return (head_pose, antennas, None)
+
+
+class LifecycleGestureMove(Move):  # type: ignore
+    """Small startup/shutdown gesture around the current pose."""
+
+    def __init__(
+        self,
+        base_head_pose: NDArray[np.float32],
+        base_antennas: Tuple[float, float],
+        kind: str,
+        duration: float = 0.9,
+    ):
+        self.base_head_pose = base_head_pose.copy()
+        self.base_antennas = _antenna_pair(base_antennas)
+        self.kind = kind
+        self._duration = duration
+
+    @property
+    def duration(self) -> float:
+        return self._duration
+
+    def evaluate(self, t: float) -> tuple[NDArray[np.float64] | None, NDArray[np.float64] | None, float | None]:
+        phase = max(0.0, min(1.0, t / max(self._duration, 1e-6)))
+        envelope = np.sin(np.pi * phase)
+        sign = 1.0 if self.kind == "startup" else -1.0
+        offset_pose = create_head_pose(
+            x=0.0,
+            y=0.0,
+            z=0.003 * envelope,
+            roll=np.deg2rad(2.5 * sign * envelope),
+            pitch=np.deg2rad(-2.0 * sign * envelope),
+            yaw=0.0,
+            degrees=False,
+            mm=False,
+        )
+        head_pose = compose_world_offset(self.base_head_pose, offset_pose, reorthonormalize=False)
+        antenna_delta = np.deg2rad(3.0) * envelope
+        antennas = self.base_antennas + np.array([antenna_delta, -antenna_delta], dtype=np.float64)
         return (head_pose, antennas, None)
 
 
@@ -269,8 +303,7 @@ class MovementManager:
         # Movement state
         self.state = MovementState()
         self.state.last_activity_time = self._now()
-        neutral_pose = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
-        self.state.last_primary_pose = (neutral_pose, (0.0, 0.0), 0.0)
+        self.state.last_primary_pose = self._read_current_pose()
 
         # Move queue (primary moves)
         self.move_queue: deque[Move] = deque()
@@ -328,6 +361,17 @@ class MovementManager:
         self._freq_stats = LoopFrequencyStats()
         self._freq_snapshot = LoopFrequencyStats()
 
+    def _read_current_pose(self) -> FullBodyPose:
+        """Read the robot's current pose without commanding a reset."""
+        try:
+            head_pose = self.current_robot.get_current_head_pose().astype(np.float32, copy=False)
+            _, antennas = self.current_robot.get_current_joint_positions()
+            return (head_pose.copy(), (float(antennas[0]), float(antennas[1])), None)
+        except Exception as e:
+            logger.warning("Could not read current robot pose, using passive neutral fallback: %s", e)
+            neutral_pose = create_head_pose(0, 0, 0, 0, 0, 0, degrees=True)
+            return (neutral_pose, (0.0, 0.0), None)
+
     def queue_move(self, move: Move) -> None:
         """Queue a primary move to run after the currently executing one.
 
@@ -335,6 +379,16 @@ class MovementManager:
         control loop remains the sole mutator of movement state.
         """
         self._command_queue.put(("queue_move", move))
+
+    def queue_lifecycle_gesture(self, kind: str) -> None:
+        """Queue a small startup/shutdown gesture around the last commanded pose."""
+        if kind not in {"startup", "shutdown"}:
+            logger.warning("Ignoring unknown lifecycle gesture: %s", kind)
+            return
+        with self._status_lock:
+            pose_snapshot = clone_full_body_pose(self._last_commanded_pose)
+        logger.info("Queueing small %s lifecycle gesture without reset.", kind)
+        self.queue_move(LifecycleGestureMove(pose_snapshot[0], pose_snapshot[1], kind))
 
     def clear_move_queue(self) -> None:
         """Stop the active move and discard any queued primary moves.

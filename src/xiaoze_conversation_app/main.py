@@ -596,6 +596,7 @@ def run(
     # Start async services
     if movement_manager:
         movement_manager.start()
+        movement_manager.queue_lifecycle_gesture("startup")
     if head_wobbler:
         head_wobbler.start()
     platform_service.start()
@@ -657,6 +658,8 @@ def run(
         shutdown_event.set()
     finally:
         if movement_manager:
+            movement_manager.queue_lifecycle_gesture("shutdown")
+            time.sleep(1.0)
             movement_manager.stop()
         if head_wobbler:
             head_wobbler.stop()
