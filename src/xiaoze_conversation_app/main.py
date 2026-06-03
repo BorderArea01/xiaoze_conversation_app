@@ -140,7 +140,7 @@ def run(
                 robot_kwargs["robot_name"] = args.robot_name
 
             logger.info("Initializing ReachyMini (SDK will auto-detect appropriate backend)")
-            robot = ReachyMini(**robot_kwargs)
+            robot = ReachyMini(**robot_kwargs, automatic_body_yaw=False)
 
         except TimeoutError as e:
             logger.error(f"Connection timeout: Failed to connect to Reachy Mini daemon. Details: {e}")
