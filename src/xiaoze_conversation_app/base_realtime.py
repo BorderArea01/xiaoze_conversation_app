@@ -241,6 +241,25 @@ class BaseRealtimeHandler(ConversationHandler, ABC):
         self.last_activity_time = asyncio.get_event_loop().time()
         logger.debug("last activity time updated to %s (%s)", self.last_activity_time, reason)
 
+    def _set_movement_listening(self, listening: bool) -> None:
+        movement_manager = getattr(self.deps, "movement_manager", None)
+        if movement_manager is None:
+            return
+        try:
+            movement_manager.set_listening(listening)
+        except Exception as e:
+            logger.debug("Failed to update movement listening state: %s", e)
+
+    def _movement_is_idle(self) -> bool:
+        movement_manager = getattr(self.deps, "movement_manager", None)
+        if movement_manager is None:
+            return True
+        try:
+            return bool(movement_manager.is_idle())
+        except Exception as e:
+            logger.debug("Failed to read movement idle state: %s", e)
+            return True
+
     def copy(self) -> "BaseRealtimeHandler":
         """Create a copy of the handler."""
         return type(self)(
@@ -751,12 +770,12 @@ class BaseRealtimeHandler(ConversationHandler, ABC):
                             self._clear_queue()
                         if self.deps.head_wobbler is not None:
                             self.deps.head_wobbler.reset()
-                        self.deps.movement_manager.set_listening(True)
+                        self._set_movement_listening(True)
                         logger.debug("User speech started")
 
                     if event.type == "input_audio_buffer.speech_stopped":
                         self._mark_activity("user_speech_stopped")
-                        self.deps.movement_manager.set_listening(False)
+                        self._set_movement_listening(False)
                         logger.debug("User speech stopped - server will auto-commit with VAD")
 
                     if event.type == "response.output_audio.done":
@@ -822,7 +841,7 @@ class BaseRealtimeHandler(ConversationHandler, ABC):
                         raw_transcript = event.transcript or ""
                         transcript = raw_transcript.strip()
                         logger.debug("User transcript: %s", raw_transcript)
-                        self.deps.movement_manager.set_listening(False)
+                        self._set_movement_listening(False)
 
                         # Cancel any pending partial emission
                         if self.partial_transcript_task and not self.partial_transcript_task.done():
@@ -933,7 +952,7 @@ class BaseRealtimeHandler(ConversationHandler, ABC):
                             logger.error("Realtime error [%s]: %s (raw=%s)", code, msg, err)
 
                         if code == "input_audio_buffer_commit_empty":
-                            self.deps.movement_manager.set_listening(False)
+                            self._set_movement_listening(False)
 
                         # Only show user-facing errors, not internal state errors.
                         if code not in ("input_audio_buffer_commit_empty", "conversation_already_has_active_response"):
@@ -1000,7 +1019,7 @@ class BaseRealtimeHandler(ConversationHandler, ABC):
 
         # Handle idle
         idle_duration = asyncio.get_event_loop().time() - self.last_activity_time
-        if idle_duration > 180.0 and self._response_done_event.is_set() and self.deps.movement_manager.is_idle():
+        if idle_duration > 180.0 and self._response_done_event.is_set() and self._movement_is_idle():
             try:
                 await self.send_idle_signal(idle_duration)
             except Exception as e:

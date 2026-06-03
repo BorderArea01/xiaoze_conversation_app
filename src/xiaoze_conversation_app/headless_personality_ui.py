@@ -344,8 +344,18 @@ def mount_personality_routes(
             status = await _run_handler_action(change_voice(voice))
             get_current_voice = getattr(handler, "get_current_voice", None)
             current_voice = get_current_voice() if callable(get_current_voice) else voice
+            current_profile = _current_choice()
+            if current_profile in _choices():
+                try:
+                    _write_profile(
+                        _sanitize_name(current_profile),
+                        read_instructions_for(current_profile),
+                        read_tools_for(current_profile),
+                        current_voice,
+                    )
+                except Exception as e:
+                    logger.warning("Failed to persist voice into current profile %r: %s", current_profile, e)
             if persist_personality is not None:
-                current_profile = _current_choice()
                 persist_personality(current_profile or None, current_voice)
             return {
                 "ok": True,
