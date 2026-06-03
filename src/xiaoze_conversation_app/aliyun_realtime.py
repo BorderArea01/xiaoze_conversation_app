@@ -207,7 +207,7 @@ class _AliyunRealtimeConnection:
             "instructions": payload.get("instructions") or "",
             "voice": output_audio.get("voice") or payload.get("voice"),
             "input_audio_format": payload.get("input_audio_format") or "pcm16",
-            "output_audio_format": payload.get("output_audio_format") or "pcm24",
+            "output_audio_format": payload.get("output_audio_format") or "pcm16",
         }
         if transcription is not None:
             session_payload["enable_input_audio_transcription"] = True
@@ -395,7 +395,7 @@ class AliyunRealtimeHandler(BaseRealtimeHandler):
             "instructions": self._get_session_instructions(),
             "voice": self.get_current_voice(),
             "input_audio_format": "pcm16",
-            "output_audio_format": "pcm24",
+            "output_audio_format": "pcm16",
             "enable_input_audio_transcription": True,
             "input_audio_transcription_model": "qwen3-asr-flash-realtime",
             "turn_detection": {
@@ -415,7 +415,7 @@ class AliyunRealtimeHandler(BaseRealtimeHandler):
             "instructions": instructions,
             "voice": voice,
             "input_audio_format": "pcm16",
-            "output_audio_format": "pcm24",
+            "output_audio_format": "pcm16",
         }
 
     async def _build_realtime_client(self) -> _AliyunRealtimeClient:

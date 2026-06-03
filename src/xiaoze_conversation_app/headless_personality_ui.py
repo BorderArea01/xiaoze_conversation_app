@@ -53,7 +53,7 @@ def mount_personality_routes(
 
     class ApplyPayload(BaseModel):
         name: str
-        persist: Optional[bool] = False
+        persist: Optional[bool] = True
 
     def _choices() -> list[str]:
         return list_personalities()
@@ -260,7 +260,7 @@ def mount_personality_routes(
             )  # type: ignore
         # Accept both JSON payload and query param for convenience
         sel_name: Optional[str] = None
-        persist_flag = bool(persist) if persist is not None else False
+        persist_flag = bool(persist) if persist is not None else True
         if payload and getattr(payload, "name", None):
             sel_name = payload.name
             persist_flag = bool(getattr(payload, "persist", False))

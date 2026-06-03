@@ -59,6 +59,9 @@ def list_personalities() -> List[str]:
 
 def resolve_profile_dir(selection: str) -> Path:
     """Resolve the directory path for the given profile selection."""
+    override = _profiles_root() / "user_personalities" / selection
+    if selection in SCENARIO_PRESETS and override.is_dir():
+        return override
     return _profiles_root() / selection
 
 

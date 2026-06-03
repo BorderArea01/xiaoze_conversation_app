@@ -68,6 +68,13 @@ def _with_chinese_default(instructions: str) -> str:
     return f"{instructions.strip()}\n\n{CHINESE_DEFAULT_RULES}"
 
 
+def _resolve_profile_file(profile: str, filename: str) -> Path:
+    override_file = config.PROFILES_DIRECTORY / "user_personalities" / profile / filename
+    if override_file.exists():
+        return override_file
+    return config.PROFILES_DIRECTORY / profile / filename
+
+
 def get_session_instructions() -> str:
     """Get session instructions, loading from REACHY_MINI_CUSTOM_PROFILE if set."""
     profile = config.REACHY_MINI_CUSTOM_PROFILE
@@ -83,7 +90,7 @@ def get_session_instructions() -> str:
             )
         else:
             logger.info(f"Loading prompt from profile '{profile}'")
-        instructions_file = config.PROFILES_DIRECTORY / profile / INSTRUCTIONS_FILENAME
+        instructions_file = _resolve_profile_file(profile, INSTRUCTIONS_FILENAME)
 
     try:
         if instructions_file.exists():
@@ -113,7 +120,7 @@ def get_session_voice(default: str | None = None) -> str:
     if not profile:
         return fallback
     try:
-        voice_file = config.PROFILES_DIRECTORY / profile / VOICE_FILENAME
+        voice_file = _resolve_profile_file(profile, VOICE_FILENAME)
         if voice_file.exists():
             voice = voice_file.read_text(encoding="utf-8").strip()
             return voice or fallback
