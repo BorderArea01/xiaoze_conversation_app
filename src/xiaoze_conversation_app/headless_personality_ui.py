@@ -88,6 +88,24 @@ def mount_personality_routes(
         except Exception:
             return _fallback_choice()
 
+    async def _run_handler_action(coro: Any) -> Any:
+        """Run a handler coroutine on its owning loop when one is available."""
+        target_loop = None
+        try:
+            target_loop = get_loop()
+        except Exception:
+            target_loop = None
+
+        try:
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            running_loop = None
+
+        if target_loop is not None and target_loop.is_running() and target_loop is not running_loop:
+            future = asyncio.run_coroutine_threadsafe(coro, target_loop)
+            return await asyncio.wrap_future(future)
+        return await coro
+
     @app.get("/personalities")
     def _list() -> dict:  # type: ignore
         choices = _choices()
@@ -259,20 +277,27 @@ def mount_personality_routes(
 
         try:
             logger.info("Headless apply: requested name=%r", sel_name)
+            apply_personality = getattr(handler, "apply_personality", None)
+            if not callable(apply_personality):
+                return JSONResponse({"ok": False, "error": "handler_cannot_apply_personality"}, status_code=500)  # type: ignore
+
+            status = await _run_handler_action(apply_personality(sel_name))
             get_current_voice = getattr(handler, "get_current_voice", None)
-            voice_override = get_current_voice() if callable(get_current_voice) else None
+            current_voice = get_current_voice() if callable(get_current_voice) else None
             persisted_choice = _startup_choice()
             if persist_flag and persist_personality is not None:
                 try:
-                    persist_personality(sel_name, voice_override)
+                    persist_personality(sel_name, current_voice)
                     persisted_choice = _startup_choice()
                 except Exception as e:
                     logger.warning("Failed to persist startup personality: %s", e)
             return {
                 "ok": True,
-                "status": f"已保存个性「{sel_name}」，重启应用后生效。",
+                "status": f"已应用个性「{sel_name}」。{status}",
                 "startup": persisted_choice,
-                "requires_restart": True,
+                "current": _current_choice(),
+                "current_voice": current_voice or get_default_voice_for_backend(),
+                "requires_restart": False,
             }
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)  # type: ignore
@@ -301,13 +326,20 @@ def mount_personality_routes(
         if not voice:
             return JSONResponse({"ok": False, "error": "missing_voice"}, status_code=400)  # type: ignore
         try:
+            change_voice = getattr(handler, "change_voice", None)
+            if not callable(change_voice):
+                return JSONResponse({"ok": False, "error": "handler_cannot_change_voice"}, status_code=500)  # type: ignore
+            status = await _run_handler_action(change_voice(voice))
+            get_current_voice = getattr(handler, "get_current_voice", None)
+            current_voice = get_current_voice() if callable(get_current_voice) else voice
             if persist_personality is not None:
                 current_profile = _current_choice()
-                persist_personality(current_profile or None, voice)
+                persist_personality(current_profile or None, current_voice)
             return {
                 "ok": True,
-                "status": f"已保存音色「{voice}」，重启应用后生效。",
-                "requires_restart": True,
+                "status": f"已切换音色「{current_voice}」。{status}",
+                "voice": current_voice,
+                "requires_restart": False,
             }
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)  # type: ignore

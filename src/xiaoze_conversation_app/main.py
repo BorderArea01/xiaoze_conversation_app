@@ -489,7 +489,7 @@ def run(
             mount_personality_routes(
                 app,
                 handler,
-                lambda: asyncio.get_event_loop() if asyncio.get_event_loop().is_running() else None,
+                lambda: getattr(_spa_local_stream, "_asyncio_loop", None),
                 persist_personality=_persist_spa_personality,
                 get_persisted_personality=_read_spa_personality,
             )

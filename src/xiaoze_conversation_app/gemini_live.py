@@ -249,7 +249,7 @@ class GeminiLiveHandler(ConversationHandler):
 
             try:
                 _ = get_session_instructions()
-                _ = get_session_voice()
+                self._voice_override = _resolve_gemini_voice(get_session_voice())
             except BaseException as e:
                 logger.error("Failed to resolve personality content: %s", e)
                 return f"Failed to apply personality: {e}"

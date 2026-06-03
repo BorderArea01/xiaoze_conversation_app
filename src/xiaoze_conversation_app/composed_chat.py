@@ -185,8 +185,9 @@ class ComposedChatHandler(ConversationHandler):
 
     async def apply_personality(self, profile: str | None) -> str:
         set_custom_profile(profile)
+        self._voice_override = get_session_voice(get_default_voice_for_backend(self.BACKEND_PROVIDER))
         self._messages = []
-        return "Applied personality. It will be used on the next turn."
+        return f"Applied personality. It will be used on the next turn with voice {self.get_current_voice()}."
 
     async def start_up(self) -> None:
         self._closed = False
