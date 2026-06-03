@@ -22,6 +22,9 @@
 - Made voice changes return immediately and persist the selected voice while the realtime session restarts in the background.
 - Fixed voice persistence when the current personality is the built-in default profile.
 - Wired the SPA route mount to startup personality persistence so voice choices survive app restarts.
+- Limited the personality selector to the three requested scenario presets only.
+- Changed personality and voice apply actions to persist settings without hot-restarting the realtime audio session, avoiding the stuck "waiting for robot audio link" state after configuration changes.
+- Fixed the personality selector action row so New, Apply, and Delete wrap cleanly instead of overflowing the settings panel.
 - Changed the default Reachy Mini prompt to use Simplified Chinese by default instead of English.
 - Appended Chinese-first language rules at the shared prompt loader so custom profiles also default to Chinese.
 - Forced realtime typed turns and tool-result replies to request concise Chinese speech responses.

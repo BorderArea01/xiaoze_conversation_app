@@ -15,6 +15,7 @@ from .config import DEFAULT_PROFILES_DIRECTORY, get_default_voice_for_backend
 
 
 DEFAULT_OPTION = "(built-in default)"
+SCENARIO_PRESETS = ("展厅机器人", "会议机器人", "秘书机器人")
 
 
 def _profiles_root() -> Path:
@@ -42,21 +43,15 @@ def _sanitize_name(name: str) -> str:
 
 
 def list_personalities() -> List[str]:
-    """List available personality profile names."""
+    """List the three supported scenario personality profile names."""
     names: List[str] = []
     root = _profiles_root()
     try:
         if root.exists():
-            for p in sorted(root.iterdir()):
-                if p.name == "user_personalities":
-                    continue
+            for name in SCENARIO_PRESETS:
+                p = root / name
                 if p.is_dir() and (p / "instructions.txt").exists():
-                    names.append(p.name)
-        udir = root / "user_personalities"
-        if udir.exists():
-            for p in sorted(udir.iterdir()):
-                if p.is_dir() and (p / "instructions.txt").exists():
-                    names.append(f"user_personalities/{p.name}")
+                    names.append(name)
     except Exception:
         pass
     return names

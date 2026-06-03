@@ -22,6 +22,7 @@ from .config import (
 from .conversation_handler import ConversationHandler
 from .headless_personality import (
     DEFAULT_OPTION,
+    SCENARIO_PRESETS,
     _sanitize_name,
     _write_profile,
     read_tools_for,
@@ -54,30 +55,42 @@ def mount_personality_routes(
         name: str
         persist: Optional[bool] = False
 
+    def _choices() -> list[str]:
+        return list_personalities()
+
+    def _fallback_choice() -> str:
+        choices = _choices()
+        return choices[0] if choices else ""
+
+    def _normalize_choice(value: str | None) -> str:
+        if value and value in _choices():
+            return value
+        return _fallback_choice()
+
     def _startup_choice() -> Any:
         """Return the persisted startup personality or default."""
         try:
             if get_persisted_personality is not None:
                 stored = get_persisted_personality()
                 if stored:
-                    return stored
+                    return _normalize_choice(stored)
             env_val = getattr(config, "REACHY_MINI_CUSTOM_PROFILE", None)
             if env_val:
-                return env_val
+                return _normalize_choice(env_val)
         except Exception:
             pass
-        return DEFAULT_OPTION
+        return _fallback_choice()
 
     def _current_choice() -> str:
         try:
             cur = getattr(config, "REACHY_MINI_CUSTOM_PROFILE", None)
-            return cur or DEFAULT_OPTION
+            return _normalize_choice(cur)
         except Exception:
-            return DEFAULT_OPTION
+            return _fallback_choice()
 
     @app.get("/personalities")
     def _list() -> dict:  # type: ignore
-        choices = [DEFAULT_OPTION, *list_personalities()]
+        choices = _choices()
         return {
             "choices": choices,
             "current": _current_choice(),
@@ -137,7 +150,7 @@ def mount_personality_routes(
             )
             _write_profile(name_s, instructions, tools_text, voice or get_default_voice_for_backend())
             value = f"user_personalities/{name_s}"
-            choices = [DEFAULT_OPTION, *list_personalities()]
+            choices = _choices()
             return {"ok": True, "value": value, "choices": choices}
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)  # type: ignore
@@ -180,7 +193,7 @@ def mount_personality_routes(
             )
             _write_profile(name_s, instr, tools, v)
             value = f"user_personalities/{name_s}"
-            choices = [DEFAULT_OPTION, *list_personalities()]
+            choices = _choices()
             return {"ok": True, "value": value, "choices": choices}
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)  # type: ignore
@@ -199,7 +212,7 @@ def mount_personality_routes(
             )
             _write_profile(name_s, instructions, tools_text, normalized_voice)
             value = f"user_personalities/{name_s}"
-            choices = [DEFAULT_OPTION, *list_personalities()]
+            choices = _choices()
             return {"ok": True, "value": value, "choices": choices}
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)  # type: ignore
@@ -216,10 +229,6 @@ def mount_personality_routes(
                 {"ok": False, "error": "profile_locked", "locked_to": LOCKED_PROFILE},
                 status_code=403,
             )  # type: ignore
-        loop = get_loop()
-        if loop is None:
-            return JSONResponse({"ok": False, "error": "loop_unavailable"}, status_code=503)  # type: ignore
-
         # Accept both JSON payload and query param for convenience
         sel_name: Optional[str] = None
         persist_flag = bool(persist) if persist is not None else False
@@ -244,27 +253,27 @@ def mount_personality_routes(
         except Exception:
             pass
         if not sel_name:
-            sel_name = DEFAULT_OPTION
-
-        async def _do_apply() -> tuple[str, Optional[str]]:
-            sel = None if sel_name == DEFAULT_OPTION else sel_name
-            status = await handler.apply_personality(sel)
-            get_current_voice = getattr(handler, "get_current_voice", None)
-            voice_override = get_current_voice() if callable(get_current_voice) else None
-            return status, voice_override
+            sel_name = _fallback_choice()
+        if sel_name not in _choices():
+            return JSONResponse({"ok": False, "error": "unknown_profile"}, status_code=404)  # type: ignore
 
         try:
             logger.info("Headless apply: requested name=%r", sel_name)
-            fut = asyncio.run_coroutine_threadsafe(_do_apply(), loop)
-            status, voice_override = fut.result(timeout=10)
+            get_current_voice = getattr(handler, "get_current_voice", None)
+            voice_override = get_current_voice() if callable(get_current_voice) else None
             persisted_choice = _startup_choice()
             if persist_flag and persist_personality is not None:
                 try:
-                    persist_personality(None if sel_name == DEFAULT_OPTION else sel_name, voice_override)
+                    persist_personality(sel_name, voice_override)
                     persisted_choice = _startup_choice()
                 except Exception as e:
                     logger.warning("Failed to persist startup personality: %s", e)
-            return {"ok": True, "status": status, "startup": persisted_choice}
+            return {
+                "ok": True,
+                "status": f"已保存个性「{sel_name}」，重启应用后生效。",
+                "startup": persisted_choice,
+                "requires_restart": True,
+            }
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)  # type: ignore
 
@@ -291,19 +300,15 @@ def mount_personality_routes(
             voice = str(raw.get("voice", "") or "")
         if not voice:
             return JSONResponse({"ok": False, "error": "missing_voice"}, status_code=400)  # type: ignore
-        loop = get_loop()
-        if loop is None:
-            return JSONResponse({"ok": False, "error": "loop_unavailable"}, status_code=503)  # type: ignore
-
-        async def _do() -> str:
-            return await handler.change_voice(voice)
-
         try:
             if persist_personality is not None:
                 current_profile = _current_choice()
-                persist_personality(None if current_profile == DEFAULT_OPTION else current_profile, voice)
-            asyncio.run_coroutine_threadsafe(_do(), loop)
-            return {"ok": True, "status": f"正在切换音色到 {voice}"}
+                persist_personality(current_profile or None, voice)
+            return {
+                "ok": True,
+                "status": f"已保存音色「{voice}」，重启应用后生效。",
+                "requires_restart": True,
+            }
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)  # type: ignore
 
@@ -325,9 +330,11 @@ def mount_personality_routes(
             pdir = resolve_profile_dir(name_s)
             if not pdir.exists():
                 return JSONResponse({'ok': False, 'error': 'not_found'}, status_code=404)  # type: ignore
+            if name_s in SCENARIO_PRESETS:
+                return JSONResponse({'ok': False, 'error': 'builtin_profile'}, status_code=403)  # type: ignore
             shutil.rmtree(str(pdir))
             logger.info('Headless delete: name=%r', name_s)
-            choices = [DEFAULT_OPTION, *list_personalities()]
+            choices = _choices()
             return {'ok': True, 'choices': choices}
         except Exception as e:
             return JSONResponse({'ok': False, 'error': str(e)}, status_code=500)  # type: ignore
