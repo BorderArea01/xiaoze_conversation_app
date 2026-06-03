@@ -34,8 +34,11 @@ def _sanitize_name(name: str) -> str:
 
     s = name.strip()
     s = re.sub(r"\s+", "_", s)
-    s = re.sub(r"[^a-zA-Z0-9_-]", "", s)
-    return s
+    return "".join(
+        ch
+        for ch in s
+        if ch.isalnum() or ch in {"_", "-"} or ("\u4e00" <= ch <= "\u9fff")
+    )
 
 
 def list_personalities() -> List[str]:

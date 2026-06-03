@@ -126,9 +126,7 @@ def mount_personality_routes(
             else get_default_voice_for_backend()
         )
 
-        name_s = _sanitize_name(name)
-        if not name_s:
-            return JSONResponse({"ok": False, "error": "invalid_name"}, status_code=400)  # type: ignore
+        name_s = _sanitize_name(name) or "自定义个性"
         try:
             logger.info(
                 "Headless save: name=%r voice=%r instr_len=%d tools_len=%d",
@@ -172,9 +170,7 @@ def mount_personality_routes(
         except Exception:
             pass
 
-        name_s = _sanitize_name(str(data.get("name") or ""))
-        if not name_s:
-            return JSONResponse({"ok": False, "error": "invalid_name"}, status_code=400)  # type: ignore
+        name_s = _sanitize_name(str(data.get("name") or "")) or "自定义个性"
         instr = str(data.get("instructions") or "")
         tools = str(data.get("tools_text") or "")
         v = str(data.get("voice") or get_default_voice_for_backend())
@@ -191,9 +187,7 @@ def mount_personality_routes(
 
     @app.get("/personalities/save_raw")
     async def _save_raw_get(name: str, instructions: str = "", tools_text: str = "", voice: str | None = None) -> dict:  # type: ignore
-        name_s = _sanitize_name(name)
-        if not name_s:
-            return JSONResponse({"ok": False, "error": "invalid_name"}, status_code=400)  # type: ignore
+        name_s = _sanitize_name(name) or "自定义个性"
         try:
             normalized_voice = voice or get_default_voice_for_backend()
             logger.info(
@@ -276,38 +270,13 @@ def mount_personality_routes(
 
     @app.get("/voices")
     async def _voices() -> list[str]:
-        loop = get_loop()
-        if loop is None:
-            return get_available_voices_for_backend()
-
-        async def _get_v() -> list[str]:
-            try:
-                return await handler.get_available_voices()
-            except Exception:
-                return get_available_voices_for_backend()
-
-        try:
-            fut = asyncio.run_coroutine_threadsafe(_get_v(), loop)
-            return fut.result(timeout=10)
-        except Exception:
-            return get_available_voices_for_backend()
+        return get_available_voices_for_backend()
 
     @app.get("/voices/current")
     async def _current_voice() -> dict[str, str]:
-        loop = get_loop()
         fallback_voice = get_default_voice_for_backend()
-        if loop is None:
-            return {"voice": fallback_voice}
-
-        def _get_current() -> str:
-            try:
-                return handler.get_current_voice()
-            except Exception:
-                return fallback_voice
-
         try:
-            fut = asyncio.run_coroutine_threadsafe(asyncio.to_thread(_get_current), loop)
-            return {"voice": fut.result(timeout=10)}
+            return {"voice": handler.get_current_voice()}
         except Exception:
             return {"voice": fallback_voice}
 
@@ -360,4 +329,3 @@ def mount_personality_routes(
             return {'ok': True, 'choices': choices}
         except Exception as e:
             return JSONResponse({'ok': False, 'error': str(e)}, status_code=500)  # type: ignore
-

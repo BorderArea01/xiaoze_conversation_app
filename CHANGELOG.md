@@ -16,6 +16,8 @@
 - Changed the default Aliyun realtime voice from `Ethan` to `Cherry`.
 - Removed the remaining hard-coded Aliyun `Ethan` fallback so realtime and split TTS defaults both honor the shared Aliyun voice default.
 - Made `/status` report the active handler voice instead of only the backend default voice.
+- Fixed personality saves with Chinese names by allowing Unicode profile names and falling back to `自定义个性` for blank names.
+- Made `/voices` and `/voices/current` return immediately from backend metadata so the voice settings tab no longer appears blank while realtime is busy.
 - Changed the default Reachy Mini prompt to use Simplified Chinese by default instead of English.
 - Appended Chinese-first language rules at the shared prompt loader so custom profiles also default to Chinese.
 - Forced realtime typed turns and tool-result replies to request concise Chinese speech responses.
